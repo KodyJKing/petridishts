@@ -8,7 +8,7 @@ import Creature from "./Creature"
 import { removeFromArray } from "./common/util"
 
 export const Settings = {
-    cellSize: 16,
+    cellSize: 8,
     initialPopulation: 1,
     maxPopulation: 40,
     enegryLossRate: 0.0006,
