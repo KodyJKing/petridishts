@@ -38,16 +38,40 @@ export default class Genome {
     }
 
     mutate() {
+        let { deletionRate } = Settings
+        let r = Math.random()
+        if ( r < deletionRate ) {
+            this.mutateDelete()
+        } else {
+            this.mutateAdd()
+        }
+    }
+
+    mutateAdd() {
+        try {
+            let positions = this.cells.keys()
+            let { x, y } = randomElement( positions )
+            while ( true ) {
+                let x2 = x + randInt( -1, 2 )
+                let y2 = y + randInt( -1, 2 )
+                if ( y2 < 0 || ( x2 == 0 && y2 == 0 ) )
+                    continue
+                this.setCell( x2, y2, randomCell() )
+                return
+            }
+        } catch ( e ) {
+            debugger
+        }
+    }
+
+    mutateDelete() {
         let positions = this.cells.keys()
         let { x, y } = randomElement( positions )
-        while ( true ) {
-            let x2 = x + randInt( -1, 2 )
-            let y2 = y + randInt( -1, 2 )
-            if ( y2 < 0 || ( x2 == 0 && y2 == 0 ) )
-                continue
-            this.setCell( x2, y2, randomCell() )
+        if ( x == 0 || y == 0 )
             return
-        }
+        this.cells.delete( x, y )
+        for ( let { x, y } of this.cells.getUnreachableKeys( 0, 0 ) )
+            this.cells.delete( x, y )
     }
 
     build( creature: Creature ) {

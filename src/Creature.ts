@@ -48,7 +48,7 @@ export default class Creature {
     }
 
     update( dt ) {
-        let { enegryLossRate, maxPopulation, maxAge } = Settings
+        let { maxPopulation, maxAge } = Settings
         let app = App.instance
         let { creatures } = app
 
@@ -60,12 +60,11 @@ export default class Creature {
 
         this.breakStretchedConstraints()
 
-        this.energy -= dt * enegryLossRate
         if ( this.energy < 0 ) {
             console.log( "STARVATION" )
             this.die()
         } else if ( this.energy > 20 && creatures.length < maxPopulation ) {
-            console.log( "TODO: REPORDUCE" )
+            this.reproduce()
         }
 
         this.age += dt
@@ -87,7 +86,6 @@ export default class Creature {
     }
 
     die() {
-        console.log( "DIE" )
         this.dead = true
         for ( let constraint of Composite.allConstraints( this.body ) )
             Composite.remove( this.body, constraint )
@@ -96,6 +94,14 @@ export default class Creature {
             if ( !( cell.constructor == Cell ) )
                 Composite.remove( this.body, body )
         }
+    }
+
+    reproduce() {
+        this.energy -= 10
+        let childGenome = Genome.createChild( this.genome )
+        let child = new Creature( childGenome )
+        App.instance.creatures.push( child )
+        child.add()
     }
 
     constrain( cellA: Cell, cellB: Cell, options ) {

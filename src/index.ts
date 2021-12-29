@@ -3,11 +3,7 @@ import * as React from "react"
 import { useState, useEffect, useRef } from "react"
 import App from "./App"
 
-function run() {
-    let app = new App()
-}
-
-run()
+let app = new App()
 
 // ReactDOM.render(
 //     <App.Render app={App.instance} />,

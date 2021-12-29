@@ -6,13 +6,15 @@ import Genome from "./Genome"
 import Grid from "./common/Grid"
 import Creature from "./Creature"
 import { removeFromArray } from "./common/util"
+import { Cell } from "./Cells"
 
 export const Settings = {
     cellSize: 8,
-    initialPopulation: 1,
+    initialPopulation: 20,
     maxPopulation: 40,
-    enegryLossRate: 0.0006,
+    // enegryLossRate: 0.0006,
     maxAge: 60 * 1000, // One minute
+    deletionRate: 0.4
 }
 
 export default class App {
@@ -53,9 +55,8 @@ export default class App {
             }
         } )
 
-        let mouse = Mouse.create( canvasArea )
         let mouseConstraint = MouseConstraint.create( this.engine, {
-            mouse,
+            mouse: Mouse.create( canvasArea ),
             constraint: {
                 // render: { visible: false },
                 stiffness: 0.01,
@@ -63,6 +64,17 @@ export default class App {
             }
         } )
         Composite.add( this.engine.world, mouseConstraint )
+
+        { // Walls
+            let wallOptions = { isStatic: true, render: { fillStyle: "red" } }
+            let { width, height } = this
+            Composite.add( this.engine.world, [
+                Bodies.rectangle( -30, height / 2, 60, this.height, wallOptions ),
+                Bodies.rectangle( this.width + 30, height / 2, 60, this.height, wallOptions ),
+                Bodies.rectangle( width / 2, -30, width, 60, wallOptions )
+                Bodies.rectangle( width / 2, height + 30, width, 60, wallOptions )
+            ] )
+        }
 
         // let bodyA = Bodies.rectangle( 100, 100, Settings.cellSize, Settings.cellSize, { render: { fillStyle: "#DAE3E8" } } )
         // Body.setVelocity( bodyA, { x: 0.5, y: 0.5 } )
@@ -78,6 +90,20 @@ export default class App {
             previousTime = currentTime
             this.update( dt )
         } )
+
+        Events.on(
+            this.engine, "collisionActive",
+            e => {
+                for ( let pair of e.pairs ) {
+                    let cellA = pair.bodyA.plugin.cell as Cell | null
+                    let cellB = pair.bodyB.plugin.cell as Cell | null
+                    if ( cellA && cellB ) {
+                        cellA.collide( cellB )
+                        cellB.collide( cellA )
+                    }
+                }
+            }
+        )
 
         Runner.run( this.runner, this.engine )
         Render.run( this.render )
@@ -96,15 +122,16 @@ export default class App {
         for ( let creature of dead )
             removeFromArray( this.creatures, creature )
 
-        // if ( this.creatures.length == 0 ) {
-        //     console.log( "EXTINCTION" )
-        //     this.spawn()
-        // }
+        if ( this.creatures.length == 0 ) {
+            console.log( "EXTINCTION" )
+            this.spawn()
+        }
     }
 
     spawn() {
         for ( let i = 0; i < Settings.initialPopulation; i++ ) {
             let creature = new Creature()
+            console.log( creature.genome.cells.getUnreachableKeys( 0, 0 ) )
             this.creatures.push( creature )
             creature.add()
         }
