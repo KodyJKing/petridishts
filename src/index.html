@@ -1,0 +1,28 @@
+<head>
+    <style>
+        body {
+            background-color: #252526;
+        }
+
+        .fillscreen {
+            overflow: hidden;
+            position: fixed;
+            left: 16px;
+            top: 16px;
+            right: 16px;
+            bottom: 16px;
+        }
+
+        #canvasArea {
+            background-color: #222E33;
+        }
+
+        #overlay {}
+    </style>
+</head>
+
+<body>
+    <div class="fillscreen" id="canvasArea" />
+    <div class="fillscreen" id="overlay" />
+    <script src="index.tsx" type="module" />
+</body>
