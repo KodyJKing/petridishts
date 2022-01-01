@@ -1,10 +1,13 @@
-import { Composite, Constraint, Vector, World } from "matter-js";
+import { Composite, Constraint, Vector, World } from "matter-js"
 import App, { Settings } from "./App"
-import { Cell } from "./Cells";
-import { clamp, randInt, random } from "./common/math";
-import Genome from "./Genome";
+import { Cell } from "./Cells"
+import Grid from "./common/Grid"
+import { clamp, randInt, random } from "./common/math"
+import Vector2 from "./common/Vector2"
+import Genome from "./Genome"
 
 export default class Creature {
+    rootCell?: Cell
     body: Composite
     genome: any
     dead = false
@@ -19,11 +22,11 @@ export default class Creature {
             this.genome = Genome.create( { initialMutations: 50 } )
         }
         this.genome.build( this )
-        this.energy = 10
+        this.energy = Settings.startingEnergy
         this.age = 0
     }
 
-    add( position?: { x: number, y: number } ) {
+    add( position?: Vector2 ) {
         let app = App.instance
         let { width, height } = app
         let padding = 100
@@ -63,8 +66,6 @@ export default class Creature {
         if ( this.energy < 0 ) {
             console.log( "STARVATION" )
             this.die()
-        } else if ( this.energy > 20 && creatures.length < maxPopulation ) {
-            this.reproduce()
         }
 
         this.age += dt
@@ -81,23 +82,78 @@ export default class Creature {
             let distSq = Vector.magnitudeSquared( diff )
             let { strength, lengthFactorSquared } = constraint.plugin
             if ( distSq > cellSize * cellSize * lengthFactorSquared * strength )
-                Composite.remove( this.body, constraint )
+                this.removeConstraint( constraint )
         }
+    }
+
+    removeCell( cell: Cell ) {
+        for ( let constraint of cell.constraints )
+            this.removeConstraint( constraint, false )
+        this.removeSeveredCells()
+    }
+
+    removeConstraint( constraint: Constraint, removeSevered = true ) {
+        // @ts-ignore
+        let plugin = constraint.plugin
+        plugin.removed = true
+        Composite.remove( this.body, constraint )
+        if ( removeSevered )
+            this.removeSeveredCells()
+    }
+
+    removeSeveredCells() {
+        if ( !this.rootCell ) return
+
+        let reachable = new Set<Cell>()
+
+        function visit( cell: Cell ) {
+            if ( !cell || reachable.has( cell ) )
+                return
+            reachable.add( cell )
+            for ( let constraint of cell.constraints ) {
+                let { bodyA, bodyB } = constraint
+                // @ts-ignore
+                if ( !constraint.plugin.removed ) {
+                    for ( let body of [ bodyA, bodyB ] )
+                        visit( body.plugin.cell )
+                }
+            }
+        }
+
+        visit( this.rootCell )
+
+        for ( let body of Composite.allBodies( this.body ) ) {
+            let cell = body.plugin.cell
+            if ( cell && !reachable.has( cell ) ) {
+                cell.severe()
+            }
+        }
+
     }
 
     die() {
         this.dead = true
-        for ( let constraint of Composite.allConstraints( this.body ) )
-            Composite.remove( this.body, constraint )
-        for ( let body of Composite.allBodies( this.body ) ) {
-            let cell = body.plugin.cell
-            if ( !( cell.constructor == Cell ) )
-                Composite.remove( this.body, body )
+
+        let leaveBasicCells = true
+
+        if ( leaveBasicCells ) {
+            for ( let constraint of Composite.allConstraints( this.body ) )
+                Composite.remove( this.body, constraint )
+            for ( let body of Composite.allBodies( this.body ) ) {
+                let cell = body.plugin.cell
+                if ( cell )
+                    cell.severe()
+                // if ( !( cell.constructor == Cell ) )
+                //     Composite.remove( this.body, body )
+            }
+        } else {
+            Composite.remove( App.instance.engine.world, this.body )
         }
     }
 
+    canReproduce() { return this.energy > Settings.startingEnergy * 2 }
     reproduce() {
-        this.energy -= 10
+        this.energy -= Settings.startingEnergy
         let childGenome = Genome.createChild( this.genome )
         let child = new Creature( childGenome )
         App.instance.creatures.push( child )

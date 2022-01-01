@@ -7,6 +7,7 @@ import Grid from "./common/Grid"
 import Creature from "./Creature"
 import { removeFromArray } from "./common/util"
 import { Cell } from "./Cells"
+import createSampler from "./common/createSampler"
 
 export const Settings = {
     cellSize: 8,
@@ -14,7 +15,8 @@ export const Settings = {
     maxPopulation: 40,
     // enegryLossRate: 0.0006,
     maxAge: 60 * 1000, // One minute
-    deletionRate: 0.4
+    deletionRate: 0.4,
+    startingEnergy: 1
 }
 
 export default class App {
@@ -71,7 +73,7 @@ export default class App {
             Composite.add( this.engine.world, [
                 Bodies.rectangle( -30, height / 2, 60, this.height, wallOptions ),
                 Bodies.rectangle( this.width + 30, height / 2, 60, this.height, wallOptions ),
-                Bodies.rectangle( width / 2, -30, width, 60, wallOptions )
+                Bodies.rectangle( width / 2, -30, width, 60, wallOptions ),
                 Bodies.rectangle( width / 2, height + 30, width, 60, wallOptions )
             ] )
         }
@@ -122,9 +124,29 @@ export default class App {
         for ( let creature of dead )
             removeFromArray( this.creatures, creature )
 
+        let creatureCount = this.creatures.length
+        if ( creatureCount < Settings.maxPopulation ) {
+            let readyToReproduce = this.creatures.filter( c => c.canReproduce() )
+            if ( readyToReproduce.length > 0 ) {
+                let sampler = createSampler( readyToReproduce.map( c => c.energy ) )
+                let index = sampler()
+                let selected = readyToReproduce[ index ]
+                selected.reproduce()
+            }
+        }
+
         if ( this.creatures.length == 0 ) {
             console.log( "EXTINCTION" )
             this.spawn()
+        }
+
+        for ( let body of Composite.allBodies( this.engine.world ) ) {
+            let cell = body.plugin.cell
+            if ( cell && cell.decayTime > 0 ) {
+                cell.decayTime -= dt
+                if ( cell.decayTime <= 0 )
+                    cell.remove()
+            }
         }
     }
 

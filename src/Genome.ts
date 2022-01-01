@@ -77,6 +77,7 @@ export default class Genome {
     build( creature: Creature ) {
         let { cellSize } = Settings
         let cellIns = Grid.Create()
+
         for ( let pos of this.cells.keys() ) {
             let type = this.getCell( pos.x, pos.y )
 
@@ -120,6 +121,9 @@ export default class Genome {
                 }
             }
         }
+
+        creature.rootCell = cellIns.get( 0, 0 )
+
     }
 
 }

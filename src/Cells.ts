@@ -1,4 +1,4 @@
-import Matter, { Bodies, Body, Constraint, World } from "matter-js"
+import Matter, { Bodies, Body, Composite, Constraint, Query, Vector, World } from "matter-js"
 import App, { Settings } from "./App"
 import Creature from "./Creature"
 
@@ -6,6 +6,7 @@ function getWeight( cell ) { return cell.constructor.weight }
 function getColor( cell ) { return cell.constructor.color }
 function getDensity( cell ) { return cell.constructor.density }
 function getEnergyRate( cell ) { return cell.constructor.energyRate }
+function getFoodValue( cell ) { return cell.constructor.foodValue }
 
 export class Cell {
     static weight = 5
@@ -13,11 +14,15 @@ export class Cell {
     static density = 1
     static strength = 1.1
     static energyRate = -0.00001
+    static foodValue = 5
 
-    creature: Creature
+    static decayTime = 20 * 1000
+
+    creature?: Creature
     constraints: Constraint[]
     body: Body
     edible = true
+    decayTime = -1
 
     constructor( creature: Creature, x, y ) {
         this.creature = creature
@@ -37,13 +42,27 @@ export class Cell {
         World.remove( engine.world, this.body, true )
         for ( let constraint of this.constraints )
             World.remove( engine.world, constraint, true )
+        this.creature?.removeCell( this )
         this.onRemove()
     }
     onRemove() { }
 
+    severe() {
+        this.creature = undefined
+        this.edible = true
+        this.body.render.fillStyle = Cell.color
+        this.decayTime = Cell.decayTime * ( 1 - Math.random() * .2 )
+        this.constraints.length = 0
+        // if ( this.constructor != Cell ) {
+        //     this.remove()
+        // }
+    }
+
     update( dt ) {
-        this.creature.energy += getEnergyRate( this ) * dt
-        this.onUpdate( dt )
+        if ( this.creature ) {
+            this.creature.energy += getEnergyRate( this ) * dt
+            this.onUpdate( dt )
+        }
     }
     onUpdate( dt ) { }
 
@@ -57,10 +76,11 @@ export class CellRoot extends Cell {
     static density = 1
     static strength = 1.1
     static energyRate = -0.00001
+    static foodValue = 10
 
     onRemove() {
         console.log( "ROOT CELL LOSS" )
-        this.creature.die()
+        this.creature?.die()
     }
 }
 
@@ -69,7 +89,9 @@ export class CellPhotosynthesis extends Cell {
     static color = "#509A53"
     static density = 5
     static strength = 1.1
-    static energyRate = 0.00012
+    // static energyRate = 0.00012
+    static energyRate = 0.00003
+    static foodValue = 5
 }
 
 export class CellArmor extends Cell {
@@ -77,7 +99,8 @@ export class CellArmor extends Cell {
     static color = "#73B3C0"
     static density = 5
     static strength = 5
-    static energyRate = -0.00002
+    static energyRate = -0.00001
+    static foodValue = 0
 
     edible = false
 }
@@ -87,9 +110,10 @@ export class CellMouth extends Cell {
     static color = "#E35444"
     static density = 2
     static strength = 1.1
-    static energyRate = -0.00004
+    static energyRate = -0.00010
+    static foodValue = 0
 
-    static cooldown = 200
+    static cooldown = 500
     edible = false
     cooldown = 0
 
@@ -98,10 +122,11 @@ export class CellMouth extends Cell {
     }
 
     collide( other: Cell ) {
+        if ( !this.creature ) return
         let differentCreature = other.creature != this.creature
         if ( differentCreature && other.edible && this.cooldown <= 0 ) {
             other.remove()
-            this.creature.energy += 1
+            this.creature.energy += getFoodValue( other )
             this.cooldown += CellMouth.cooldown
         }
     }
@@ -112,7 +137,8 @@ export class CellThruster extends Cell {
     static color = "#C88E4B"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00008
+    static energyRate = -0.00004
+    static foodValue = 7
 
     static thrust = 0.000002
 
@@ -121,9 +147,71 @@ export class CellThruster extends Cell {
         Matter.Body.applyForce(
             this.body, this.body.position,
             {
-                x: Math.cos( this.body.angle ) * force
+                x: Math.cos( this.body.angle ) * force,
                 y: Math.sin( this.body.angle ) * force
             }
         )
     }
+}
+
+export class CellSpinner extends Cell {
+    static weight = 1
+    static color = "#A05893"
+    static density = 1
+    static strength = 1.1
+    static energyRate = -0.00004
+    static foodValue = 7
+
+    static torque = 0.00001
+
+    onUpdate( dt ) {
+        let speed = Vector.magnitude( this.body.velocity )
+        this.body.torque += CellSpinner.torque * dt / Math.max( speed, 0.1 )
+    }
+}
+
+export class CellSuction extends Cell {
+    static weight = 1
+    static color = "#007F7F"
+    static density = 1
+    static strength = 1.1
+    static energyRate = -0.00004
+    static foodValue = 7
+
+    force() { return 0.001 }
+
+    onUpdate( dt ) {
+        let app = App.instance
+        let { engine } = app
+        let allBodies = Composite.allBodies( engine.world )
+
+        let radius = Settings.cellSize * 5
+        let pos = this.body.position
+        let circle = Bodies.circle( pos.x, pos.y, radius )
+        let touching = Query.collides( circle, allBodies )
+
+        for ( let collision of touching ) {
+            let body = collision.bodyA
+            let cell = body.plugin.cell
+            if ( cell && ( cell.creature != this.creature ) ) {
+                let diff = Vector.sub( this.body.position, body.position )
+                let lengthSq = Vector.magnitudeSquared( diff )
+                let force = Vector.mult( diff, this.force() / lengthSq )
+                Body.applyForce( body, body.position, force )
+                Body.applyForce( this.body, this.body.position, Vector.neg( force ) )
+            }
+        }
+
+    }
+}
+
+export class CellRepulsion extends CellSuction {
+    static weight = 1
+    static color = "#7F51FF"
+    static density = 1
+    static strength = 1.1
+    static energyRate = -0.00004
+    static foodValue = 7
+
+    force() { return -0.001 }
 }
