@@ -55,6 +55,10 @@ export default class Grid {
         let reachableKeySet = new Set( reachableKeys.map( posKey ) )
         return this.keys().filter( pos => !reachableKeySet.has( posKey( pos ) ) )
     }
+
+    get size() {
+        return Object.keys( this.values ).length
+    }
 }
 
 function posKey( pos: Position ) {

@@ -7,25 +7,35 @@ import Creature from "./Creature"
 import { Composite } from "matter-js"
 import { Settings } from "./App"
 
-type Options = {
-    initialMutations: number
-}
-
 export default class Genome {
     cells!: Grid
 
-    static create( options: Options ) {
+    static create() {
         let result = new Genome()
         result.cells = Grid.Create()
-        result.setCell( 0, 0, Cells.CellRoot )
-        for ( let i = 0; i < options.initialMutations; i++ )
-            result.mutate()
+
+        let startRandom = true
+        if ( startRandom ) {
+            result.setCell( 0, 0, Cells.CellRoot )
+            for ( let i = 0; i < Settings.initialMutations; i++ )
+                result.mutate()
+        } else {
+            for ( let dx = -2; dx <= 2; dx++ ) {
+                for ( let dy = 0; dy <= 2; dy++ ) {
+                    result.setCell( dx, dy, Cells.CellPhotosynthesis )
+                }
+            }
+            result.setCell( 0, 0, Cells.CellRoot )
+        }
+
+
         return result
     }
 
     static createChild( genome: Genome ) {
         let result = clone( genome )
-        result.mutate()
+        if ( Math.random() < Settings.mutationRate )
+            result.mutate()
         return result
     }
 
@@ -45,22 +55,21 @@ export default class Genome {
         } else {
             this.mutateAdd()
         }
+        this._costToBuild = undefined
     }
 
     mutateAdd() {
-        try {
-            let positions = this.cells.keys()
-            let { x, y } = randomElement( positions )
-            while ( true ) {
-                let x2 = x + randInt( -1, 2 )
-                let y2 = y + randInt( -1, 2 )
-                if ( y2 < 0 || ( x2 == 0 && y2 == 0 ) )
-                    continue
-                this.setCell( x2, y2, randomCell() )
-                return
-            }
-        } catch ( e ) {
-            debugger
+        if ( this.cells.size >= Settings.maxCellsPerGenome )
+            return
+        let positions = this.cells.keys()
+        let { x, y } = randomElement( positions )
+        while ( true ) {
+            let x2 = x + randInt( -1, 2 )
+            let y2 = y + randInt( -1, 2 )
+            if ( y2 < 0 || ( x2 == 0 && y2 == 0 ) )
+                continue
+            this.setCell( x2, y2, randomCell() )
+            return
         }
     }
 
@@ -72,6 +81,21 @@ export default class Genome {
         this.cells.delete( x, y )
         for ( let { x, y } of this.cells.getUnreachableKeys( 0, 0 ) )
             this.cells.delete( x, y )
+    }
+
+    _costToBuild?: number
+    costToBuild() {
+        if ( this._costToBuild != undefined ) return this._costToBuild
+        let result = 0
+        for ( let pos of this.cells.keys() ) {
+            let type = this.getCell( pos.x, pos.y )
+            let isMirrored = pos.y > 0
+            let s = isMirrored ? 2 : 1
+            result += type.foodValue * s
+        }
+        this._costToBuild = result
+        console.log( this._costToBuild )
+        return result
     }
 
     build( creature: Creature ) {
@@ -114,8 +138,10 @@ export default class Genome {
                                     }
                                 }
                             )
-                            constraint.plugin.lengthFactorSquared = dx * dx + dy * dy
-                            constraint.plugin.strength = cell.constructor.strength * neighbor.constructor.strength
+                            // @ts-ignore
+                            let plugin = constraint.plugin
+                            plugin.lengthFactorSquared = dx * dx + dy * dy
+                            plugin.strength = cell.constructor.strength * neighbor.constructor.strength
                         }
                     }
                 }

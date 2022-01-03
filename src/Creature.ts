@@ -19,7 +19,7 @@ export default class Creature {
         if ( genome ) {
             this.genome = Genome.createChild( genome )
         } else {
-            this.genome = Genome.create( { initialMutations: 50 } )
+            this.genome = Genome.create()
         }
         this.genome.build( this )
         this.energy = Settings.startingEnergy
@@ -76,12 +76,13 @@ export default class Creature {
     }
 
     breakStretchedConstraints() {
-        let { cellSize } = Settings
+        let { cellStrengthModifier } = Settings
         for ( let constraint of Composite.allConstraints( this.body ) ) {
             let diff = Vector.sub( constraint.bodyA.position, constraint.bodyB.position )
             let distSq = Vector.magnitudeSquared( diff )
+            // @ts-ignore
             let { strength, lengthFactorSquared } = constraint.plugin
-            if ( distSq > cellSize * cellSize * lengthFactorSquared * strength )
+            if ( distSq > cellStrengthModifier * lengthFactorSquared * strength )
                 this.removeConstraint( constraint )
         }
     }
@@ -125,7 +126,7 @@ export default class Creature {
         for ( let body of Composite.allBodies( this.body ) ) {
             let cell = body.plugin.cell
             if ( cell && !reachable.has( cell ) ) {
-                cell.severe()
+                cell.sever()
             }
         }
 
@@ -137,12 +138,15 @@ export default class Creature {
         let leaveBasicCells = true
 
         if ( leaveBasicCells ) {
-            for ( let constraint of Composite.allConstraints( this.body ) )
-                Composite.remove( this.body, constraint )
+            for ( let constraint of Composite.allConstraints( this.body ) ) {
+                if ( Math.random() < 0.5 )
+                    Composite.remove( this.body, constraint )
+            }
+
             for ( let body of Composite.allBodies( this.body ) ) {
                 let cell = body.plugin.cell
                 if ( cell )
-                    cell.severe()
+                    cell.sever()
                 // if ( !( cell.constructor == Cell ) )
                 //     Composite.remove( this.body, body )
             }
@@ -151,9 +155,11 @@ export default class Creature {
         }
     }
 
-    canReproduce() { return this.energy > Settings.startingEnergy * 2 }
+    reproductionCost() { return Settings.startingEnergy + this.genome.costToBuild() }
+    fertility() { return this.energy / this.reproductionCost() }
+    canReproduce() { return this.energy > this.reproductionCost() + Settings.minEnergyAfterReproduction }
     reproduce() {
-        this.energy -= Settings.startingEnergy
+        this.energy -= this.reproductionCost()
         let childGenome = Genome.createChild( this.genome )
         let child = new Creature( childGenome )
         App.instance.creatures.push( child )
