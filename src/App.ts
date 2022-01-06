@@ -11,12 +11,23 @@ import createSampler from "./common/createSampler"
 
 export const Settings = {
     cellSize: 8,
+    cellStrengthModifier: 64,
     initialPopulation: 20,
     maxPopulation: 40,
+    maxBodies: 40 * 30,
     // enegryLossRate: 0.0006,
     maxAge: 60 * 1000, // One minute
+    initialMutations: 1,
+    mutationRate: 0.5,
+    minEdits: 1, maxEdits: 3,
     deletionRate: 0.4,
-    startingEnergy: 1
+    startingEnergy: 5,
+    minEnergyAfterReproduction: 5,
+    maxCellsPerGenome: 20,
+    metabolicRate: 100,
+    carnivoreEfficiency: 1,
+    photosynthesisElevationBoost: 5,
+    gravity: 0.1
 }
 
 export default class App {
@@ -33,9 +44,9 @@ export default class App {
         App.instance = this
 
         this.engine = Engine.create()
-        this.engine.grid.bucketWidth = 20
-        this.engine.grid.bucketHeight = 20
-        this.engine.gravity.y = 0
+        this.engine.grid.bucketWidth = 15
+        this.engine.grid.bucketHeight = 15
+        this.engine.gravity.y = Settings.gravity
 
         this.runner = Runner.create( {
             delta: 1000 / 60,
@@ -59,6 +70,7 @@ export default class App {
 
         let mouseConstraint = MouseConstraint.create( this.engine, {
             mouse: Mouse.create( canvasArea ),
+            // @ts-ignore
             constraint: {
                 // render: { visible: false },
                 stiffness: 0.01,
@@ -78,18 +90,20 @@ export default class App {
             ] )
         }
 
-        // let bodyA = Bodies.rectangle( 100, 100, Settings.cellSize, Settings.cellSize, { render: { fillStyle: "#DAE3E8" } } )
+        // let bodyA = Bodies.rectangle( 0, 0, Settings.cellSize, Settings.cellSize, { render: { fillStyle: "#DAE3E8" } } )
         // Body.setVelocity( bodyA, { x: 0.5, y: 0.5 } )
         // Composite.add( this.engine.world, bodyA )
 
         this.spawn()
 
         let previousTime = performance.now()
+        let previousDt = 0
         let maxDt = 500
         Events.on( this.runner, "afterUpdate", () => {
             let currentTime = performance.now()
             let dt = Math.min( currentTime - previousTime, maxDt )
             previousTime = currentTime
+            previousDt = dt
             this.update( dt )
         } )
 
@@ -100,8 +114,8 @@ export default class App {
                     let cellA = pair.bodyA.plugin.cell as Cell | null
                     let cellB = pair.bodyB.plugin.cell as Cell | null
                     if ( cellA && cellB ) {
-                        cellA.collide( cellB )
-                        cellB.collide( cellA )
+                        cellA.collide( cellB, previousDt )
+                        cellB.collide( cellA, previousDt )
                     }
                 }
             }
@@ -124,11 +138,14 @@ export default class App {
         for ( let creature of dead )
             removeFromArray( this.creatures, creature )
 
-        let creatureCount = this.creatures.length
-        if ( creatureCount < Settings.maxPopulation ) {
+        let allBodies = Composite.allBodies( this.engine.world )
+
+        // let creatureCount = this.creatures.length
+        // if ( creatureCount < Settings.maxPopulation ) {
+        if ( allBodies.length < Settings.maxBodies ) {
             let readyToReproduce = this.creatures.filter( c => c.canReproduce() )
             if ( readyToReproduce.length > 0 ) {
-                let sampler = createSampler( readyToReproduce.map( c => c.energy ) )
+                let sampler = createSampler( readyToReproduce.map( c => c.fertility() ) )
                 let index = sampler()
                 let selected = readyToReproduce[ index ]
                 selected.reproduce()
@@ -140,7 +157,7 @@ export default class App {
             this.spawn()
         }
 
-        for ( let body of Composite.allBodies( this.engine.world ) ) {
+        for ( let body of allBodies ) {
             let cell = body.plugin.cell
             if ( cell && cell.decayTime > 0 ) {
                 cell.decayTime -= dt
@@ -153,7 +170,7 @@ export default class App {
     spawn() {
         for ( let i = 0; i < Settings.initialPopulation; i++ ) {
             let creature = new Creature()
-            console.log( creature.genome.cells.getUnreachableKeys( 0, 0 ) )
+            // console.log( creature.genome.cells.getUnreachableKeys( 0, 0 ) )
             this.creatures.push( creature )
             creature.add()
         }

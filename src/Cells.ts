@@ -9,11 +9,11 @@ function getEnergyRate( cell ) { return cell.constructor.energyRate }
 function getFoodValue( cell ) { return cell.constructor.foodValue }
 
 export class Cell {
-    static weight = 5
+    static weight = 3
     static color = "#DAE3E8"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00001
+    static energyRate = -0.00000
     static foodValue = 5
 
     static decayTime = 20 * 1000
@@ -22,18 +22,18 @@ export class Cell {
     constraints: Constraint[]
     body: Body
     edible = true
+    eaten = false
     decayTime = -1
 
     constructor( creature: Creature, x, y ) {
         this.creature = creature
         let { cellSize } = Settings
-        this.body = Bodies.rectangle(
-            x * cellSize, y * cellSize,
-            cellSize, cellSize,
-            { render: { fillStyle: getColor( this ) } }
-        )
+
+        this.body = Bodies.rectangle( x * cellSize, y * cellSize, cellSize, cellSize, { render: { fillStyle: getColor( this ) } } )
+        // this.body = Bodies.circle( x * cellSize, y * cellSize, cellSize / 2, { render: { fillStyle: getColor( this ) } } )
+
         this.body.plugin.cell = this
-        Body.setDensity( this.body, getDensity( this ) * 0.001 )
+        Body.setDensity( this.body, getDensity( this ) * 0.001 * ( 8 / Settings.cellSize ) ** 2 )
         this.constraints = []
     }
 
@@ -45,29 +45,27 @@ export class Cell {
         this.creature?.removeCell( this )
         this.onRemove()
     }
-    onRemove() { }
 
-    severe() {
+    sever() {
         this.creature = undefined
         this.edible = true
-        this.body.render.fillStyle = Cell.color
+        if ( this.loseColorOnSever() )
+            this.body.render.fillStyle = Cell.color
         this.decayTime = Cell.decayTime * ( 1 - Math.random() * .2 )
-        this.constraints.length = 0
-        // if ( this.constructor != Cell ) {
-        //     this.remove()
-        // }
     }
 
     update( dt ) {
         if ( this.creature ) {
-            this.creature.energy += getEnergyRate( this ) * dt
+            this.creature.energy += getEnergyRate( this ) * dt * Settings.metabolicRate * ( 1 + this.metabolicBoost() )
             this.onUpdate( dt )
         }
     }
+
     onUpdate( dt ) { }
-
-    collide( other: Cell ) { }
-
+    onRemove() { }
+    metabolicBoost() { return 1 }
+    collide( other: Cell, dt: number ) { }
+    loseColorOnSever() { return true }
 }
 
 export class CellRoot extends Cell {
@@ -85,33 +83,43 @@ export class CellRoot extends Cell {
 }
 
 export class CellPhotosynthesis extends Cell {
-    static weight = 5
+    static weight = 3
     static color = "#509A53"
-    static density = 5
+    static density = 2
     static strength = 1.1
     // static energyRate = 0.00012
-    static energyRate = 0.00003
+    static energyRate = 0.00006
+    // static energyRate = 0.00003
     static foodValue = 5
+
+    metabolicBoost() {
+        if ( Settings.photosynthesisElevationBoost == 0 )
+            return 0
+        let h = App.instance.height
+        let y = this.body.position.y
+        return Settings.photosynthesisElevationBoost * ( h - y ) / h
+    }
 }
 
 export class CellArmor extends Cell {
     static weight = 1
     static color = "#73B3C0"
-    static density = 5
+    static density = 3
     static strength = 5
-    static energyRate = -0.00001
-    static foodValue = 0
+    static energyRate = -0.00000
+    static foodValue = 5
 
     edible = false
 }
 
 export class CellMouth extends Cell {
-    static weight = 2
+    static weight = 3
     static color = "#E35444"
     static density = 2
     static strength = 1.1
-    static energyRate = -0.00010
-    static foodValue = 0
+    // static energyRate = -0.00010
+    static energyRate = -0.00003
+    static foodValue = 7
 
     static cooldown = 500
     edible = false
@@ -122,22 +130,51 @@ export class CellMouth extends Cell {
     }
 
     collide( other: Cell ) {
-        if ( !this.creature ) return
+        if ( !this.creature || other.eaten ) return
         let differentCreature = other.creature != this.creature
         if ( differentCreature && other.edible && this.cooldown <= 0 ) {
+            other.eaten = true
             other.remove()
-            this.creature.energy += getFoodValue( other )
+            this.creature.energy += getFoodValue( other ) * Settings.carnivoreEfficiency
             this.cooldown += CellMouth.cooldown
+
+            if ( other instanceof CellRoot && other.creature ) {
+                this.creature.energy += other.creature.energy
+                other.creature.energy = 0
+            }
         }
     }
 }
 
+// export class CellVampire extends Cell {
+//     static weight = 1
+//     static color = "#890D00"
+//     static density = 2
+//     static strength = 1.1
+//     static energyRate = -0.00005
+//     static foodValue = 7
+
+//     static energyPerMilis = 0.0012
+
+//     collide( other: Cell, dt: number ) {
+//         let { creature } = this
+//         let otherCreature = other.creature
+//         if ( !creature || !otherCreature ) return
+//         if ( otherCreature != creature ) {
+//             let energy = Math.min( dt * CellVampire.energyPerMilis, otherCreature.energy )
+//             creature.energy += energy
+//             otherCreature.energy -= energy
+//         }
+//     }
+
+// }
+
 export class CellThruster extends Cell {
-    static weight = 1
+    static weight = 3
     static color = "#C88E4B"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00004
+    static energyRate = -0.00002
     static foodValue = 7
 
     static thrust = 0.000002
@@ -159,7 +196,7 @@ export class CellSpinner extends Cell {
     static color = "#A05893"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00004
+    static energyRate = -0.00002
     static foodValue = 7
 
     static torque = 0.00001
@@ -171,11 +208,11 @@ export class CellSpinner extends Cell {
 }
 
 export class CellSuction extends Cell {
-    static weight = 1
+    static weight = 3
     static color = "#007F7F"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00004
+    static energyRate = -0.00002
     static foodValue = 7
 
     force() { return 0.001 }
@@ -207,11 +244,62 @@ export class CellSuction extends Cell {
 
 export class CellRepulsion extends CellSuction {
     static weight = 1
-    static color = "#7F51FF"
+    static color = "#CC53C9"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00004
+    static energyRate = -0.00002
     static foodValue = 7
 
     force() { return -0.001 }
+
 }
+
+// export class CellPoison extends Cell {
+//     static weight = 1
+//     static color = "#121212"
+//     static density = 1
+//     static strength = 1.1
+//     static energyRate = -0.00012
+//     static foodValue = -100
+//     loseColorOnSever() { return false }
+// }
+
+// export class CellImpact extends Cell {
+//     static weight = 1
+//     static color = "#121212"
+//     static density = 1
+//     static strength = 1.1
+//     static energyRate = -0.00006
+//     static foodValue = 7
+//     // loseColorOnSever() { return false }
+
+//     static cooldown = 500
+//     static force = 0.05
+//     edible = false
+//     cooldown = 0
+
+//     impactEvent: any = null
+
+//     onUpdate( dt ) {
+//         this.cooldown -= dt
+//         if ( this.impactEvent ) {
+//             let { force, body } = this.impactEvent
+//             this.impactEvent = null
+//             Body.applyForce( body, body.position, force )
+//         }
+//     }
+
+//     collide( other: Cell ) {
+//         if ( !this.creature || ( other.creature == this.creature ) || this.cooldown > 0 ) return
+//         // this.cooldown = CellImpact.cooldown
+
+//         let diff = Vector.sub( other.body.position, this.body.position )
+//         let dir = Vector.normalise( diff )
+//         let force = Vector.mult( dir, CellImpact.force )
+
+//         this.impactEvent = { body: other.body, force }
+
+//         // console.log( force )
+//         // Body.applyForce( other.body, other.body.position, force )
+//     }
+// }
