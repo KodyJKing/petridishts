@@ -94,7 +94,6 @@ export default class Genome {
             result += type.foodValue * s
         }
         this._costToBuild = result
-        console.log( this._costToBuild )
         return result
     }
 

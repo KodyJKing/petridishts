@@ -17,14 +17,17 @@ export const Settings = {
     maxBodies: 40 * 30,
     // enegryLossRate: 0.0006,
     maxAge: 60 * 1000, // One minute
-    initialMutations: 10,
+    initialMutations: 1,
     mutationRate: 0.5,
     minEdits: 1, maxEdits: 3,
     deletionRate: 0.4,
     startingEnergy: 5,
     minEnergyAfterReproduction: 5,
     maxCellsPerGenome: 20,
-    metabolicRate: 100
+    metabolicRate: 100,
+    carnivoreEfficiency: 1,
+    photosynthesisElevationBoost: 5,
+    gravity: 0.1
 }
 
 export default class App {
@@ -43,7 +46,7 @@ export default class App {
         this.engine = Engine.create()
         this.engine.grid.bucketWidth = 15
         this.engine.grid.bucketHeight = 15
-        this.engine.gravity.y = 0
+        this.engine.gravity.y = Settings.gravity
 
         this.runner = Runner.create( {
             delta: 1000 / 60,
@@ -87,7 +90,7 @@ export default class App {
             ] )
         }
 
-        // let bodyA = Bodies.rectangle( 100, 100, Settings.cellSize, Settings.cellSize, { render: { fillStyle: "#DAE3E8" } } )
+        // let bodyA = Bodies.rectangle( 0, 0, Settings.cellSize, Settings.cellSize, { render: { fillStyle: "#DAE3E8" } } )
         // Body.setVelocity( bodyA, { x: 0.5, y: 0.5 } )
         // Composite.add( this.engine.world, bodyA )
 

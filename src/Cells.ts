@@ -28,11 +28,10 @@ export class Cell {
     constructor( creature: Creature, x, y ) {
         this.creature = creature
         let { cellSize } = Settings
-        this.body = Bodies.rectangle(
-            x * cellSize, y * cellSize,
-            cellSize, cellSize,
-            { render: { fillStyle: getColor( this ) } }
-        )
+
+        this.body = Bodies.rectangle( x * cellSize, y * cellSize, cellSize, cellSize, { render: { fillStyle: getColor( this ) } } )
+        // this.body = Bodies.circle( x * cellSize, y * cellSize, cellSize / 2, { render: { fillStyle: getColor( this ) } } )
+
         this.body.plugin.cell = this
         Body.setDensity( this.body, getDensity( this ) * 0.001 * ( 8 / Settings.cellSize ) ** 2 )
         this.constraints = []
@@ -46,7 +45,6 @@ export class Cell {
         this.creature?.removeCell( this )
         this.onRemove()
     }
-    onRemove() { }
 
     sever() {
         this.creature = undefined
@@ -54,23 +52,20 @@ export class Cell {
         if ( this.loseColorOnSever() )
             this.body.render.fillStyle = Cell.color
         this.decayTime = Cell.decayTime * ( 1 - Math.random() * .2 )
-        // if ( this.constructor != Cell ) {
-        //     this.remove()
-        // }
     }
-
-    loseColorOnSever() { return true }
 
     update( dt ) {
         if ( this.creature ) {
-            this.creature.energy += getEnergyRate( this ) * dt * Settings.metabolicRate
+            this.creature.energy += getEnergyRate( this ) * dt * Settings.metabolicRate * ( 1 + this.metabolicBoost() )
             this.onUpdate( dt )
         }
     }
+
     onUpdate( dt ) { }
-
+    onRemove() { }
+    metabolicBoost() { return 1 }
     collide( other: Cell, dt: number ) { }
-
+    loseColorOnSever() { return true }
 }
 
 export class CellRoot extends Cell {
@@ -96,6 +91,14 @@ export class CellPhotosynthesis extends Cell {
     static energyRate = 0.00006
     // static energyRate = 0.00003
     static foodValue = 5
+
+    metabolicBoost() {
+        if ( Settings.photosynthesisElevationBoost == 0 )
+            return 0
+        let h = App.instance.height
+        let y = this.body.position.y
+        return Settings.photosynthesisElevationBoost * ( h - y ) / h
+    }
 }
 
 export class CellArmor extends Cell {
@@ -132,7 +135,7 @@ export class CellMouth extends Cell {
         if ( differentCreature && other.edible && this.cooldown <= 0 ) {
             other.eaten = true
             other.remove()
-            this.creature.energy += getFoodValue( other )
+            this.creature.energy += getFoodValue( other ) * Settings.carnivoreEfficiency
             this.cooldown += CellMouth.cooldown
 
             if ( other instanceof CellRoot && other.creature ) {

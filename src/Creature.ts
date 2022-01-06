@@ -133,26 +133,26 @@ export default class Creature {
     }
 
     die() {
+        let world = App.instance.engine.world
         this.dead = true
-
         let leaveBasicCells = true
 
         if ( leaveBasicCells ) {
             for ( let constraint of Composite.allConstraints( this.body ) ) {
+                Composite.remove( this.body, constraint )
                 if ( Math.random() < 0.5 )
-                    Composite.remove( this.body, constraint )
+                    Composite.add( world, constraint )
             }
 
             for ( let body of Composite.allBodies( this.body ) ) {
+                Composite.remove( this.body, body )
+                Composite.add( world, body )
                 let cell = body.plugin.cell
                 if ( cell )
                     cell.sever()
-                // if ( !( cell.constructor == Cell ) )
-                //     Composite.remove( this.body, body )
             }
-        } else {
-            Composite.remove( App.instance.engine.world, this.body )
         }
+        Composite.remove( world, this.body )
     }
 
     reproductionCost() { return Settings.startingEnergy + this.genome.costToBuild() }
