@@ -24,10 +24,15 @@ export class Cell {
     edible = true
     eaten = false
     decayTime = -1
+    x: number
+    y: number
 
     constructor( creature: Creature, x, y ) {
         this.creature = creature
         let { cellSize } = Settings
+
+        this.x = x
+        this.y = y
 
         this.body = Bodies.rectangle( x * cellSize, y * cellSize, cellSize, cellSize, { render: { fillStyle: getColor( this ) } } )
         // this.body = Bodies.circle( x * cellSize, y * cellSize, cellSize / 2, { render: { fillStyle: getColor( this ) } } )
@@ -47,11 +52,18 @@ export class Cell {
     }
 
     sever() {
+        if ( this.creature ) {
+            let world = App.instance.engine.world
+            Composite.remove( this.creature.body, this.body )
+            World.add( world, this.body )
+            // if ( !Composite.get( world, this.body.id, "body" ) )
+        }
         this.creature = undefined
         this.edible = true
         if ( this.loseColorOnSever() )
             this.body.render.fillStyle = Cell.color
         this.decayTime = Cell.decayTime * ( 1 - Math.random() * .2 )
+
     }
 
     update( dt ) {
@@ -77,7 +89,7 @@ export class CellRoot extends Cell {
     static foodValue = 10
 
     onRemove() {
-        console.log( "ROOT CELL LOSS" )
+        // console.log( "ROOT CELL LOSS" )
         this.creature?.die()
     }
 }
@@ -180,7 +192,12 @@ export class CellThruster extends Cell {
     static thrust = 0.000002
 
     onUpdate( dt ) {
-        let force = CellThruster.thrust * Settings.cellSize ** 2
+        if ( !this.creature )
+            return
+        let t = App.instance.engine.timing.timestamp
+        let freq = 2 / 1000 // 2 cycles per 1000 milis
+        let phase = this.creature?.noise * Math.PI * 2
+        let force = CellThruster.thrust * Settings.cellSize ** 2 * ( Math.sin( t * freq + phase ) + 1 )
         Matter.Body.applyForce(
             this.body, this.body.position,
             {
@@ -247,7 +264,8 @@ export class CellRepulsion extends CellSuction {
     static color = "#CC53C9"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00002
+    // static energyRate = -0.00002
+    static energyRate = -0.00008
     static foodValue = 7
 
     force() { return -0.001 }

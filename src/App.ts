@@ -6,7 +6,7 @@ import Genome from "./Genome"
 import Grid from "./common/Grid"
 import Creature from "./Creature"
 import { removeFromArray } from "./common/util"
-import { Cell } from "./Cells"
+import { Cell, CellRoot } from "./Cells"
 import createSampler from "./common/createSampler"
 
 export const Settings = {
@@ -15,9 +15,9 @@ export const Settings = {
     initialPopulation: 20,
     maxPopulation: 40,
     maxBodies: 40 * 30,
-    // enegryLossRate: 0.0006,
     maxAge: 60 * 1000, // One minute
     initialMutations: 1,
+    // initialMutations: 8,
     mutationRate: 0.5,
     minEdits: 1, maxEdits: 3,
     deletionRate: 0.4,
@@ -26,8 +26,24 @@ export const Settings = {
     maxCellsPerGenome: 20,
     metabolicRate: 100,
     carnivoreEfficiency: 1,
-    photosynthesisElevationBoost: 5,
-    gravity: 0.1
+    photosynthesisElevationBoost: 0,
+    gravity: 0.0,
+    minEnergyAfterRepair: 3,
+    baseRepairCost: 3,
+    repairChancePerTick: 0.01,
+
+    disableReproduction: false,
+    showConstraints: false,
+    deleteOnClick: false,
+
+    brain: {
+        maxHidden: 20,
+        addRate: 0.3,
+        deleteRate: 0.2,
+        disconnectRate: 0.2,
+        connectRate: 0.5,
+        modifyRate: 0.5
+    }
 }
 
 export default class App {
@@ -39,6 +55,8 @@ export default class App {
     width: number
     height: number
     creatures: Creature[] = []
+
+    mouseConstraint: Matter.MouseConstraint
 
     constructor() {
         App.instance = this
@@ -68,7 +86,7 @@ export default class App {
             }
         } )
 
-        let mouseConstraint = MouseConstraint.create( this.engine, {
+        let mouseConstraint = this.mouseConstraint = MouseConstraint.create( this.engine, {
             mouse: Mouse.create( canvasArea ),
             // @ts-ignore
             constraint: {
@@ -140,15 +158,15 @@ export default class App {
 
         let allBodies = Composite.allBodies( this.engine.world )
 
-        // let creatureCount = this.creatures.length
-        // if ( creatureCount < Settings.maxPopulation ) {
-        if ( allBodies.length < Settings.maxBodies ) {
-            let readyToReproduce = this.creatures.filter( c => c.canReproduce() )
-            if ( readyToReproduce.length > 0 ) {
-                let sampler = createSampler( readyToReproduce.map( c => c.fertility() ) )
-                let index = sampler()
-                let selected = readyToReproduce[ index ]
-                selected.reproduce()
+        if ( !Settings.disableReproduction ) {
+            if ( allBodies.length < Settings.maxBodies ) {
+                let readyToReproduce = this.creatures.filter( c => c.canReproduce() )
+                if ( readyToReproduce.length > 0 ) {
+                    let sampler = createSampler( readyToReproduce.map( c => c.fertility() ) )
+                    let index = sampler()
+                    let selected = readyToReproduce[ index ]
+                    selected.reproduce()
+                }
             }
         }
 
@@ -165,6 +183,19 @@ export default class App {
                     cell.remove()
             }
         }
+
+        if ( this.mouseConstraint.body ) {
+            let cell = this.mouseConstraint.body.plugin.cell as Cell
+            if ( cell && Settings.deleteOnClick )
+                cell.remove()
+            // if ( cell && cell.creature ) {
+            //     if ( cell.constructor == CellRoot )
+            //         cell.creature.repair()
+            //     else
+            //         cell.remove()
+            // }
+        }
+
     }
 
     spawn() {

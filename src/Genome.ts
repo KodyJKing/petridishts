@@ -4,9 +4,11 @@ import * as Cells from "./Cells"
 import createSampler from "./common/createSampler"
 import { randInt, randomElement } from "./common/math"
 import Creature from "./Creature"
-import { Composite } from "matter-js"
+import Matter, { Body, Composite, Vector } from "matter-js"
 import { Settings } from "./App"
 
+const VecRight = Vector.create( 1, 0 )
+const VecUp = Vector.create( 0, 1 )
 export default class Genome {
     cells!: Grid
 
@@ -99,11 +101,85 @@ export default class Genome {
 
     build( creature: Creature ) {
         let { cellSize } = Settings
-        let cellIns = Grid.Create()
+        let cellGrid = Grid.Create()
 
         for ( let pos of this.cells.keys() ) {
             let type = this.getCell( pos.x, pos.y )
+            for ( let sign of [ 1, -1 ] ) {
+                if ( pos.y == 0 && sign == -1 )
+                    continue
+                let x = pos.x
+                let y = pos.y * sign
+                let cell = this.buildCell( creature, x, y, type, cellGrid )
+                this.connectCell( creature, cell, x, y, cellGrid )
+            }
+        }
 
+        creature.rootCell = cellGrid.get( 0, 0 )
+    }
+
+    buildCell( creature: Creature, x: number, y: number, type, cellGrid: Grid ) {
+        let cell = new type( creature, x, y )
+        cellGrid.set( x, y, cell )
+        Composite.add( creature.body, cell.body )
+        return cell
+    }
+
+    connectCell(
+        creature: Creature, cell: Cells.Cell,
+        x: number, y: number,
+        cellGrid: Grid,
+        VR: Matter.Vector = VecRight,
+        VU: Matter.Vector = VecUp,
+    ) {
+        let { cellSize } = Settings
+
+        function getPoint( x, y ) {
+            return {
+                x: x * VR.x + y * VU.x,
+                y: x * VR.y + y * VU.y
+            }
+        }
+
+        for ( let dx = -1; dx < 2; dx++ ) {
+            for ( let dy = -1; dy < 2; dy++ ) {
+                if ( dx == 0 && dy == 0 )
+                    continue
+                let x2 = x + dx
+                let y2 = y + dy
+                let neighbor = cellGrid.get( x2, y2 )
+                if ( neighbor ) {
+                    let constraint = creature.constrain(
+                        cell, neighbor,
+                        {
+                            render: { visible: Settings.showConstraints },
+                            pointA: getPoint(
+                                dx * cellSize * .5,
+                                dy * cellSize * .5
+                            ),
+                            pointB: getPoint(
+                                dx * cellSize * -.5,
+                                dy * cellSize * -.5
+                            )
+                        }
+                    )
+                    // @ts-ignore
+                    let plugin = constraint.plugin
+                    plugin.lengthFactorSquared = dx * dx + dy * dy
+                    // @ts-ignore
+                    plugin.strength = cell.constructor.strength * neighbor.constructor.strength
+                }
+            }
+        }
+    }
+
+    repair( creature: Creature ) {
+        let cellGrid = creature.getCellGrid()
+
+        // console.log( cellGrid.size )
+
+        let repairablePositions = [] as { x: number, y: number, mount: Cells.Cell }[]
+        for ( let pos of this.cells.keys() ) {
             for ( let sign of [ 1, -1 ] ) {
                 if ( pos.y == 0 && sign == -1 )
                     continue
@@ -111,44 +187,63 @@ export default class Genome {
                 let x = pos.x
                 let y = pos.y * sign
 
-                let cell = new type( creature, x, y )
-                cellIns.set( x, y, cell )
-                Composite.add( creature.body, cell.body )
+                if ( cellGrid.get( x, y ) )
+                    continue // No need to repair.
 
-                for ( let dx = -1; dx < 2; dx++ ) {
-                    for ( let dy = -1; dy < 2; dy++ ) {
+                for ( let dx = -1; dx <= 1; dx++ ) {
+                    for ( let dy = -1; dy <= 1; dy++ ) {
                         if ( dx == 0 && dy == 0 )
                             continue
+
                         let x2 = x + dx
                         let y2 = y + dy
-                        let neighbor = cellIns.get( x2, y2 )
-                        if ( neighbor ) {
-                            let constraint = creature.constrain(
-                                cell, neighbor,
-                                {
-                                    render: { visible: false },
-                                    pointA: {
-                                        x: dx * cellSize * .5,
-                                        y: dy * cellSize * .5
-                                    },
-                                    pointB: {
-                                        x: dx * cellSize * -.5,
-                                        y: dy * cellSize * -.5
-                                    }
-                                }
-                            )
-                            // @ts-ignore
-                            let plugin = constraint.plugin
-                            plugin.lengthFactorSquared = dx * dx + dy * dy
-                            plugin.strength = cell.constructor.strength * neighbor.constructor.strength
-                        }
+                        let cell = cellGrid.get( x2, y2 )
+                        if ( cell )
+                            repairablePositions.push( { x, y, mount: cell } )
+
                     }
                 }
+
             }
         }
 
-        creature.rootCell = cellIns.get( 0, 0 )
+        if ( repairablePositions.length == 0 )
+            return
 
+        let repairIndex = Math.floor( Math.random() * repairablePositions.length )
+        let repairPos = repairablePositions[ repairIndex ]
+        let x = repairPos.x
+        let y = repairPos.y
+        let type = this.getCell( x, Math.abs( y ) )
+
+        let mount = repairPos.mount
+        let mountBody = mount.body
+        let dx = x - mount.x
+        let dy = y - mount.y
+
+        let cost = type.foodValue + Settings.baseRepairCost
+        if ( cost + Settings.minEnergyAfterRepair > creature.energy )
+            return
+        creature.energy -= cost
+
+        let cell = this.buildCell( creature, x, y, type, cellGrid )
+        let cellBody = cell.body
+
+        let { cellSize } = Settings
+        let t = mountBody.angle
+        let c = Math.cos( -t )
+        let s = Math.sin( -t )
+        Body.setAngle( cellBody, t )
+        Body.setPosition( cellBody, {
+            x: mountBody.position.x + c * dx * cellSize + s * dy * cellSize,
+            y: mountBody.position.y - s * dx * cellSize + c * dy * cellSize
+        } )
+
+        let VR = Matter.Vector.create( c, -s )
+        let VU = Matter.Vector.create( s, c )
+        this.connectCell( creature, cell, x, y, cellGrid, VR, VU )
+
+        console.log( "CELL REGROWN!" )
     }
 
 }

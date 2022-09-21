@@ -9,10 +9,11 @@ import Genome from "./Genome"
 export default class Creature {
     rootCell?: Cell
     body: Composite
-    genome: any
+    genome: Genome
     dead = false
     energy: number
     age: number
+    noise: number
 
     constructor( genome = null ) {
         this.body = Composite.create()
@@ -24,6 +25,7 @@ export default class Creature {
         this.genome.build( this )
         this.energy = Settings.startingEnergy
         this.age = 0
+        this.noise = Math.random()
     }
 
     add( position?: Vector2 ) {
@@ -64,15 +66,22 @@ export default class Creature {
         this.breakStretchedConstraints()
 
         if ( this.energy < 0 ) {
-            console.log( "STARVATION" )
+            // console.log( "STARVATION" )
             this.die()
         }
 
         this.age += dt
         if ( this.age > maxAge ) {
-            console.log( "OLD AGE" )
+            // console.log( "OLD AGE" )
             this.die()
         }
+
+        if ( Math.random() < Settings.repairChancePerTick )
+            this.repair()
+    }
+
+    repair() {
+        this.genome.repair( this )
     }
 
     breakStretchedConstraints() {
@@ -145,8 +154,8 @@ export default class Creature {
             }
 
             for ( let body of Composite.allBodies( this.body ) ) {
-                Composite.remove( this.body, body )
-                Composite.add( world, body )
+                // Composite.remove( this.body, body )
+                // Composite.add( world, body )
                 let cell = body.plugin.cell
                 if ( cell )
                     cell.sever()
@@ -177,6 +186,16 @@ export default class Creature {
         cellB.constraints.push( constraint )
         Composite.add( this.body, constraint )
         return constraint
+    }
+
+    // TODO: Update this incrementally rather than rebuilding.
+    getCellGrid() {
+        let cellGrid = Grid.Create()
+        for ( let body of Composite.allBodies( this.body ) ) {
+            let cell = body.plugin.cell as Cell
+            cellGrid.set( cell.x, cell.y, cell )
+        }
+        return cellGrid
     }
 
 }
