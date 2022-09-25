@@ -1,5 +1,6 @@
 import { Composite, Constraint, Vector, World } from "matter-js"
-import App, { Settings } from "./App"
+import App from "./App"
+import { Settings } from "./Settings"
 import { Cell } from "./Cells"
 import Grid from "./common/Grid"
 import { clamp, randInt, random } from "./common/math"

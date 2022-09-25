@@ -1,5 +1,6 @@
 import Matter, { Bodies, Body, Composite, Constraint, Query, Vector, World } from "matter-js"
-import App, { Settings } from "./App"
+import App from "./App"
+import { Settings } from "./Settings"
 import Creature from "./Creature"
 
 function getWeight( cell ) { return cell.constructor.weight }

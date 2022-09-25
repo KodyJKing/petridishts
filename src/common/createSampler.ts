@@ -1,6 +1,6 @@
 export default function createSampler( weights: number[] ) {
     let cumulativeWeight = 0
-    let cdf = []
+    let cdf: number[] = []
     for ( let weight of weights ) cdf.push( cumulativeWeight += weight )
     let netWeight = cdf[ cdf.length - 1 ]
 

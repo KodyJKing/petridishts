@@ -5,7 +5,7 @@ import createSampler from "./common/createSampler"
 import { randInt, randomElement } from "./common/math"
 import Creature from "./Creature"
 import Matter, { Body, Composite, Vector } from "matter-js"
-import { Settings } from "./App"
+import { Settings } from "./Settings"
 
 const VecRight = Vector.create( 1, 0 )
 const VecUp = Vector.create( 0, 1 )

@@ -8,43 +8,7 @@ import Creature from "./Creature"
 import { removeFromArray } from "./common/util"
 import { Cell, CellRoot } from "./Cells"
 import createSampler from "./common/createSampler"
-
-export const Settings = {
-    cellSize: 8,
-    cellStrengthModifier: 64,
-    initialPopulation: 20,
-    maxPopulation: 40,
-    maxBodies: 40 * 30,
-    maxAge: 60 * 1000, // One minute
-    initialMutations: 1,
-    // initialMutations: 8,
-    mutationRate: 0.5,
-    minEdits: 1, maxEdits: 3,
-    deletionRate: 0.4,
-    startingEnergy: 5,
-    minEnergyAfterReproduction: 5,
-    maxCellsPerGenome: 20,
-    metabolicRate: 100,
-    carnivoreEfficiency: 1,
-    photosynthesisElevationBoost: 0,
-    gravity: 0.0,
-    minEnergyAfterRepair: 3,
-    baseRepairCost: 3,
-    repairChancePerTick: 0.01,
-
-    disableReproduction: false,
-    showConstraints: false,
-    deleteOnClick: false,
-
-    brain: {
-        maxHidden: 20,
-        addRate: 0.3,
-        deleteRate: 0.2,
-        disconnectRate: 0.2,
-        connectRate: 0.5,
-        modifyRate: 0.5
-    }
-}
+import { Settings } from "./Settings"
 
 export default class App {
     static instance: App
