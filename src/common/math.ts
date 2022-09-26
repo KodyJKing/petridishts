@@ -12,6 +12,18 @@ export function randomElement( array ) {
     return array[ randInt( 0, array.length ) ]
 }
 
+export function randomElementX( ...arrays ) {
+    let netLength = arrays.reduce( ( a, b ) => a + b.length, 0 )
+    if ( netLength == 0 )
+        return null
+    let i = randInt( 0, netLength )
+    for ( let array of arrays ) {
+        if ( i < array.length )
+            return array[ i ]
+        i -= array.length
+    }
+}
+
 export function clamp( x, min = 0, max = 1 ) {
     if ( x < min ) return min
     if ( x > max ) return max

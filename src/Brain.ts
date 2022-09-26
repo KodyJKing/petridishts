@@ -7,7 +7,7 @@
 
 import { Settings } from "./Settings"
 import createSampler from "./common/createSampler"
-import { keySampler, randInt, randomElement } from "./common/math"
+import { keySampler, randInt, randomElement, randomElementX } from "./common/math"
 
 class Node {
     inputs: [ number, number ][] = []
@@ -40,39 +40,46 @@ export class BrainGenome {
     hidden!: string[]
     connections!: [ string, string, number ][]
     hiddenNodeCounter: number = 0
+    biases!: { [ key: string ]: number }
 
     static create( ctx: BrainContext ) {
         let result = new BrainGenome()
-        result.connections
+        result.hidden = []
+        result.connections = []
+        result.biases = {}
     }
 
     mutate( ctx: BrainContext ) {
         switch ( sampleMutationType() ) {
-            case "connect":
-                return this.mutateAddConnection( ctx )
-            case "disconnect":
-                return this.mutateDeleteConnection()
-            case "modify":
-                this.mutateWeight()
-            case "add":
-                this.mutateAddHidden( ctx )
+            case "connect": return this.mutateAddConnection( ctx )
+            case "disconnect": return this.mutateDeleteConnection()
+            case "modifyWeight": return this.mutateWeight()
+            case "modifyBias": return this.mutateBias( ctx )
+            case "add": return this.mutateAddHidden( ctx )
+            case "delete": return this.mutateDeleteHidden()
         }
     }
 
     mutateAddConnection( ctx: BrainContext ) {
-        let nodeA = this.randomNode( ctx )
-        let nodeB = this.randomNode( ctx )
-        this.addRandomConnection( nodeA, nodeB )
+        this.addRandomConnection(
+            this.randomNode( ctx ),
+            this.randomNode( ctx, false )
+        )
     }
 
-    addRandomConnection( nodeA, nodeB ) {
-        this.connections.push( [ nodeA, nodeB, Math.random() * 2 - 1 ] )
+    addRandomConnection( fromNode, toNode ) {
+        this.connections.push( [ fromNode, toNode, Math.random() * 2 - 1 ] )
     }
 
     mutateWeight() {
         if ( this.connections.length == 0 ) return
         let index = randInt( 0, this.connections.length )
         this.connections[ index ][ 2 ] += Math.random() * 2 - 1
+    }
+
+    mutateBias( ctx: BrainContext ) {
+        let node = this.randomNode( ctx, false )
+        this.biases[ node ] += Math.random() * 2 - 1
     }
 
     mutateDeleteConnection() {
@@ -86,27 +93,28 @@ export class BrainGenome {
             return
         let name = "hidden" + this.hiddenNodeCounter++
         this.hidden.push( name )
+        this.biases[ name ] = Math.random() * 2 - 1
         for ( let i = 0; i < Settings.brain.initialInputsToHidden; i++ )
             this.addRandomConnection( this.randomNode( ctx ), name )
         for ( let i = 0; i < Settings.brain.initialOutputsToHidden; i++ )
-            this.addRandomConnection( name, this.randomNode( ctx ) )
+            this.addRandomConnection( name, this.randomNode( ctx, false ) )
     }
 
-    randomNode( ctx: BrainContext ) {
-        let { hidden } = this
-        let { inputs, outputs } = ctx
+    mutateDeleteHidden() {
+        if ( this.hidden.length == 0 ) return
+        let index = randInt( 0, this.hidden.length )
+        let name = this.hidden[ index ]
+        delete this.biases[ name ]
+        this.hidden.splice( index, 1 )
+    }
 
-        let netNodes = inputs.length + outputs.length + hidden.length
-        let cumInput = inputs.length / netNodes
-        let cumOutput = cumInput + outputs.length / netNodes
-
-        let r = Math.random()
-        if ( r < cumInput )
-            return randomElement( inputs )
-        else if ( r < cumOutput )
-            return randomElement( outputs )
-        else
-            return randomElement( hidden )
+    randomNode( ctx: BrainContext, includeInputs = true, includeOutputs = true ) {
+        let arrays = [ this.hidden ]
+        if ( includeInputs )
+            arrays.push( ctx.inputs )
+        if ( includeOutputs )
+            arrays.push( ctx.outputs )
+        return randomElementX( arrays )
     }
 
 }

@@ -41,7 +41,8 @@ export const Settings = {
             delete: 0.2,
             disconnect: 0.2,
             connect: 0.5,
-            modify: 0.5
+            modifyWeight: 0.5,
+            modifyBias: 0.3
         }
     }
 };
