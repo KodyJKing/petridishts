@@ -177,9 +177,11 @@ export default class Creature {
     }
 
     constrain( cellA: Cell, cellB: Cell, options ) {
+        //@ts-ignore
+        let stiffness = cellA.constructor.stiffness * cellB.constructor.stiffness
         let constraint = Constraint.create(
             Object.assign(
-                { bodyA: cellA.body, bodyB: cellB.body },
+                { bodyA: cellA.body, bodyB: cellB.body, stiffness },
                 options
             )
         )

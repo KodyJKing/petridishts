@@ -150,15 +150,16 @@ export default class App {
 
         if ( this.mouseConstraint.body ) {
             let cell = this.mouseConstraint.body.plugin.cell as Cell
-            if ( cell && Settings.deleteOnClick )
-                cell.remove()
-            // if ( cell && cell.creature ) {
-            //     if ( cell.constructor == CellRoot )
-            //         cell.creature.repair()
-            //     else
-            //         cell.remove()
-            // }
+            if ( cell ) {
+                if ( Settings.deleteOnClick )
+                    cell.remove()
+
+                if ( cell.creature )
+                    console.log( cell.creature.genome.ioKeys() )
+            }
         }
+
+
 
     }
 

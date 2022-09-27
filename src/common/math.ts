@@ -12,10 +12,10 @@ export function randomElement( array ) {
     return array[ randInt( 0, array.length ) ]
 }
 
-export function randomElementX( ...arrays ) {
+export function randomElementX<T>( ...arrays: T[][] ): T | undefined {
     let netLength = arrays.reduce( ( a, b ) => a + b.length, 0 )
     if ( netLength == 0 )
-        return null
+        return undefined
     let i = randInt( 0, netLength )
     for ( let array of arrays ) {
         if ( i < array.length )

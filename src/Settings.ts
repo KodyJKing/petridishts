@@ -24,6 +24,8 @@ export const Settings = {
     photosynthesisElevationBoost: 0,
     gravity: 0.0,
 
+    edibleMouths: true,
+
     minEnergyAfterRepair: 3,
     baseRepairCost: 3,
     repairChancePerTick: 0.01,
@@ -37,8 +39,8 @@ export const Settings = {
         initialInputsToHidden: 2,
         initialOutputsToHidden: 2,
         mutationRates: {
-            add: 0.3,
-            delete: 0.2,
+            addHidden: 0.3,
+            deleteHidden: 0.2,
             disconnect: 0.2,
             connect: 0.5,
             modifyWeight: 0.5,

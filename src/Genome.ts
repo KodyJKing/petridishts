@@ -22,11 +22,9 @@ export default class Genome {
             for ( let i = 0; i < Settings.initialMutations; i++ )
                 result.mutate()
         } else {
-            for ( let dx = -2; dx <= 2; dx++ ) {
-                for ( let dy = 0; dy <= 2; dy++ ) {
+            for ( let dx = -2; dx <= 2; dx++ )
+                for ( let dy = 0; dy <= 2; dy++ )
                     result.setCell( dx, dy, Cells.CellPhotosynthesis )
-                }
-            }
             result.setCell( 0, 0, Cells.CellRoot )
         }
 
@@ -97,6 +95,28 @@ export default class Genome {
         }
         this._costToBuild = result
         return result
+    }
+
+    ioKeys() {
+        let inputKeys: string[] = []
+        let outputKeys: string[] = []
+
+        for ( let pos of this.cells.keys() ) {
+            let type = this.getCell( pos.x, pos.y )
+            for ( let sign of [ 1, -1 ] ) {
+                if ( pos.y == 0 && sign == -1 )
+                    continue
+                let x = pos.x
+                let y = pos.y * sign
+
+                for ( let channel of type.inputs as string[] )
+                    inputKeys.push( Cells.Cell.iokey( "input", channel, x, y ) )
+                for ( let channel of type.outputs as string[] )
+                    outputKeys.push( Cells.Cell.iokey( "output", channel, x, y ) )
+            }
+        }
+
+        return [ inputKeys, outputKeys ]
     }
 
     build( creature: Creature ) {
@@ -243,7 +263,7 @@ export default class Genome {
         let VU = Matter.Vector.create( s, c )
         this.connectCell( creature, cell, x, y, cellGrid, VR, VU )
 
-        console.log( "CELL REGROWN!" )
+        // console.log( "CELL REGROWN!" )
     }
 
 }

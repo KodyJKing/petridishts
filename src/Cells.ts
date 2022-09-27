@@ -16,8 +16,12 @@ export class Cell {
     static strength = 1.1
     static energyRate = -0.00000
     static foodValue = 5
+    static stiffness = 1
 
     static decayTime = 20 * 1000
+
+    static inputs: string[] = []
+    static outputs: string[] = []
 
     creature?: Creature
     constraints: Constraint[]
@@ -27,6 +31,14 @@ export class Cell {
     decayTime = -1
     x: number
     y: number
+
+    static iokey( type: "input" | "output", channel: string, x: number, y: number ) {
+        return `${ type }_${ channel }_${ x },${ y }`
+    }
+
+    iokey( type: "input" | "output", channel: string ) {
+        return Cell.iokey( type, channel, this.x, this.y )
+    }
 
     constructor( creature: Creature, x, y ) {
         this.creature = creature
@@ -135,7 +147,7 @@ export class CellMouth extends Cell {
     static foodValue = 7
 
     static cooldown = 500
-    edible = false
+    edible = Settings.edibleMouths
     cooldown = 0
 
     onUpdate( dt ) {
@@ -145,6 +157,16 @@ export class CellMouth extends Cell {
     collide( other: Cell ) {
         if ( !this.creature || other.eaten ) return
         let differentCreature = other.creature != this.creature
+
+        // Can eat other mouth if we have more energy.
+        // TODO: Add an optional probabilistic rule.
+        if ( other instanceof CellMouth ) {
+            let otherEnergy = other.creature?.energy ?? 0
+            let thisEnergy = this.creature.energy ?? 0
+            if ( otherEnergy > thisEnergy )
+                return
+        }
+
         if ( differentCreature && other.edible && this.cooldown <= 0 ) {
             other.eaten = true
             other.remove()
@@ -191,6 +213,8 @@ export class CellThruster extends Cell {
     static foodValue = 7
 
     static thrust = 0.000002
+
+    static outputs: string[] = [ "thrust" ]
 
     onUpdate( dt ) {
         if ( !this.creature )
@@ -273,6 +297,17 @@ export class CellRepulsion extends CellSuction {
 
 }
 
+// export class CellStringy extends Cell {
+//     static weight = 3
+//     static color = "#FFFFCC"
+//     static density = 0.5
+//     static strength = 1 / 0.05
+//     static energyRate = 0
+//     static foodValue = 2
+
+//     static stiffness = 0.05
+// }
+
 // export class CellPoison extends Cell {
 //     static weight = 1
 //     static color = "#121212"
@@ -284,7 +319,7 @@ export class CellRepulsion extends CellSuction {
 // }
 
 // export class CellImpact extends Cell {
-//     static weight = 1
+//     static weight = 10
 //     static color = "#121212"
 //     static density = 1
 //     static strength = 1.1
