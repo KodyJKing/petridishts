@@ -1,6 +1,6 @@
 
 export const Settings = {
-    cellSize: 8,
+    cellSize: 6,
     cellStrengthModifier: 64,
 
     initialPopulation: 20,
@@ -36,15 +36,16 @@ export const Settings = {
 
     brain: {
         maxHidden: 20,
-        initialInputsToHidden: 2,
-        initialOutputsToHidden: 2,
+        initialInputsToHidden: 5,
+        initialOutputsToHidden: 5,
+        mutationStandardDev: 10, // (the standard deviation of guassian before taking the absolute value and floor)
         mutationRates: {
-            addHidden: 0.3,
-            deleteHidden: 0.2,
-            disconnect: 0.2,
+            addHidden: 0.1,
+            deleteHidden: 0.05,
+            disconnect: 0.05,
             connect: 0.5,
-            modifyWeight: 0.5,
-            modifyBias: 0.3
+            modifyWeight: 3,
+            modifyBias: 1
         }
     }
 };

@@ -62,7 +62,7 @@ export default class App {
         Composite.add( this.engine.world, mouseConstraint )
 
         { // Walls
-            let wallOptions = { isStatic: true, render: { fillStyle: "red" } }
+            let wallOptions = { isStatic: true, render: { fillStyle: "red" }, plugin: { isWall: true } }
             let { width, height } = this
             Composite.add( this.engine.world, [
                 Bodies.rectangle( -30, height / 2, 60, this.height, wallOptions ),
@@ -78,35 +78,54 @@ export default class App {
 
         this.spawn()
 
-        let previousTime = performance.now()
-        let previousDt = 0
-        let maxDt = 500
+        // let previousTime = performance.now()
+        // let previousDt = 0
+        // let maxDt = 500
         Events.on( this.runner, "afterUpdate", () => {
-            let currentTime = performance.now()
-            let dt = Math.min( currentTime - previousTime, maxDt )
-            previousTime = currentTime
-            previousDt = dt
+            // let currentTime = performance.now()
+            // let dt = Math.min( currentTime - previousTime, maxDt )
+            // previousTime = currentTime
+            // previousDt = dt
+            let dt = this.engineDt()
             this.update( dt )
         } )
 
         Events.on(
             this.engine, "collisionActive",
             e => {
+                let dt = this.engineDt()
                 for ( let pair of e.pairs ) {
                     let cellA = pair.bodyA.plugin.cell as Cell | null
                     let cellB = pair.bodyB.plugin.cell as Cell | null
                     if ( cellA && cellB ) {
-                        cellA.collide( cellB, previousDt )
-                        cellB.collide( cellA, previousDt )
+                        cellA.collide( cellB, dt )
+                        cellB.collide( cellA, dt )
                     }
                 }
             }
         )
 
+        for ( let eventName of [ "collisionStart", "collisionEnd", "collisionActive" ] ) {
+            let listenerName = "on_" + eventName
+            Events.on(
+                this.engine, eventName,
+                e => {
+                    for ( let pair of e.pairs ) {
+                        let listenerA = pair.bodyA.plugin[ listenerName ] as ( ( body: Body ) => void ) | undefined
+                        let listenerB = pair.bodyB.plugin[ listenerName ] as ( ( body: Body ) => void ) | undefined
+                        if ( listenerA ) listenerA( pair.bodyB )
+                        if ( listenerB ) listenerB( pair.bodyA )
+                    }
+                }
+            )
+        }
+
+
         Runner.run( this.runner, this.engine )
         Render.run( this.render )
     }
 
+    frameCount = 0
     update( dt ) {
         let dead = [] as Creature[]
 
@@ -121,6 +140,9 @@ export default class App {
             removeFromArray( this.creatures, creature )
 
         let allBodies = Composite.allBodies( this.engine.world )
+
+        if ( ( ( this.frameCount++ ) % 1000 ) == 0 )
+            this.printMemoryDebug()
 
         if ( !Settings.disableReproduction ) {
             if ( allBodies.length < Settings.maxBodies ) {
@@ -155,12 +177,24 @@ export default class App {
                     cell.remove()
 
                 if ( cell.creature )
-                    console.log( cell.creature.genome.ioKeys() )
+                    console.log( cell.creature )
             }
         }
 
+    }
 
+    printMemoryDebug() {
+        let numConstraints = Composite.allConstraints( this.engine.world ).length
+        let numComposites = Composite.allComposites( this.engine.world ).length
+        let numBodies = Composite.allBodies( this.engine.world ).length
+        let numCreatures = this.creatures.length
 
+        let averageBrainConnections = 0
+        for ( let creature of this.creatures )
+            averageBrainConnections += creature.genome.brain.connectionCount()
+        averageBrainConnections /= numCreatures
+
+        console.log( { numCreatures, averageBrainConnections, numBodies, numComposites, numConstraints } )
     }
 
     spawn() {
@@ -170,5 +204,15 @@ export default class App {
             this.creatures.push( creature )
             creature.add()
         }
+    }
+
+
+
+    engineTime() {
+        return this.engine.timing.timestamp
+    }
+
+    engineDt() {
+        return this.engine.timing.lastDelta
     }
 }

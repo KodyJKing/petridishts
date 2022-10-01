@@ -1,0 +1,4 @@
+- Add eye cell with distance and color channels.
+- Add brain symmetry option.
+- Make energy consumption based off use of actuators rather than flat rate.
+- Make expected number of mutations proportional to genome size for better coverage of each feature.

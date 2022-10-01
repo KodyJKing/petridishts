@@ -2,15 +2,17 @@ import clone from "./common/clone"
 import Grid from "./common/Grid"
 import * as Cells from "./Cells"
 import createSampler from "./common/createSampler"
-import { randInt, randomElement } from "./common/math"
+import { randInt, randomElement, randomGuassian } from "./common/math"
 import Creature from "./Creature"
 import Matter, { Body, Composite, Vector } from "matter-js"
 import { Settings } from "./Settings"
+import { BrainGenome } from "./BrainGenome"
 
 const VecRight = Vector.create( 1, 0 )
 const VecUp = Vector.create( 0, 1 )
 export default class Genome {
     cells!: Grid
+    brain!: BrainGenome
 
     static create() {
         let result = new Genome()
@@ -28,14 +30,23 @@ export default class Genome {
             result.setCell( 0, 0, Cells.CellRoot )
         }
 
+        let [ inKeys, outKeys ] = result.ioKeys()
+        result.brain = BrainGenome.create()
+        result.brain.setIOKeys( inKeys, outKeys )
 
         return result
     }
 
     static createChild( genome: Genome ) {
-        let result = clone( genome )
+        let result = clone( genome ) as Genome
         if ( Math.random() < Settings.mutationRate )
             result.mutate()
+        let [ inKeys, outKeys ] = result.ioKeys()
+        result.brain.setIOKeys( inKeys, outKeys )
+        let numMutations = Math.floor( Math.abs( randomGuassian() * Settings.brain.mutationStandardDev ) )
+        for ( let i = 0; i < numMutations; i++ )
+            result.brain.mutate()
+        result.brain.prune()
         return result
     }
 
@@ -98,7 +109,7 @@ export default class Genome {
     }
 
     ioKeys() {
-        let inputKeys: string[] = []
+        let inputKeys: string[] = Object.keys( Creature.standardInputs )
         let outputKeys: string[] = []
 
         for ( let pos of this.cells.keys() ) {
@@ -141,7 +152,7 @@ export default class Genome {
     buildCell( creature: Creature, x: number, y: number, type, cellGrid: Grid ) {
         let cell = new type( creature, x, y )
         cellGrid.set( x, y, cell )
-        Composite.add( creature.body, cell.body )
+        Composite.add( creature.body, cell.composite )
         return cell
     }
 

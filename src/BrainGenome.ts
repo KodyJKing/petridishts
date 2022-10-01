@@ -1,5 +1,4 @@
 /*
-    TODO: Implement BrainGenome.buildBrain.
     TODO: Add i/o to some cells.
     TODO: Add way to visualize brain layout and activation. 
         PREREQS: react refactor, rendering refactor, creature details component
@@ -28,9 +27,20 @@ export class BrainGenome {
         return result
     }
 
+    connectionCount() {
+        let count = 0
+        for ( let group of [ this.hidden, this.outputs ] )
+            for ( let node of group )
+                count += Object.keys( node.weights ).length
+        return count
+    }
+
     setIOKeys( inKeys: string[], outKeys: string[] ) {
         let inKeySet = new Set( inKeys )
         let outKeySet = new Set( outKeys )
+
+        // console.log( "Setting io keys:" )
+        // console.log( { inKeys, outKeys } )
 
         const addRemoveNodes = ( list: NodeGene[], expectedKeys: Set<string>, isSink: boolean ) => {
             let toRemove: NodeGene[] = []
@@ -45,7 +55,7 @@ export class BrainGenome {
                 let node: NodeGene = { name, bias: 0, weights: {} }
                 list.push( node )
                 if ( isSink )
-                    this.initializeSinkNode( node )
+                    this.initializeSinkNode( node, 2 )
             }
         }
 
@@ -67,7 +77,7 @@ export class BrainGenome {
         for ( let group of groups ) {
             for ( let nodeGene of group ) {
                 let { weights, bias } = nodeGene
-                let node: Node = { inputs: [], value: 0, bias }
+                let node: Node = { inputs: [], value: 0, bias, static: group == this.inputs }
                 for ( let key in weights )
                     node.inputs.push( [ brainMap[ key ], weights[ key ] ] )
                 brain.nodes.push( node )
@@ -80,8 +90,6 @@ export class BrainGenome {
     // Mutation methods:
 
     mutate() {
-        let mutationType = sampleMutationType()
-        console.log( mutationType )
         switch ( sampleMutationType() ) {
             case "connect": return this.mutateConnect()
             case "disconnect": return this.mutateDisconect()
@@ -95,19 +103,27 @@ export class BrainGenome {
     mutateConnect() {
         let source = this.randomNode()
         let sink = this.randomSinkNode()
-        sink.weights[ source.name ] = Math.random() * 2 - 1
+        if ( source && sink )
+            sink.weights[ source.name ] = Math.random() * 2 - 1
     }
     mutateDisconect() {
-        let [ weights, key ] = this.randomWeight() as [ Weights, string ]
-        delete weights[ key ]
+        let weight = this.randomWeight() as [ Weights, string ] | undefined
+        if ( weight ) {
+            let [ weights, key ] = weight
+            delete weights[ key ]
+        }
     }
     mutateWeight() {
-        let [ weights, key ] = this.randomWeight() as [ Weights, string ]
-        weights[ key ] += Math.random() * 2 - 1
+        let weight = this.randomWeight() as [ Weights, string ] | undefined
+        if ( weight ) {
+            let [ weights, key ] = weight
+            weights[ key ] += Math.random() * 2 - 1
+        }
     }
     mutateBias() {
         let node = this.randomSinkNode()
-        node.bias += Math.random() * 2 - 1
+        if ( node )
+            node.bias += Math.random() * 2 - 1
     }
     mutateAddHidden() {
         if ( this.hidden.length >= Settings.brain.maxHidden )
@@ -119,8 +135,8 @@ export class BrainGenome {
         this.hidden.push( node )
         this.initializeSinkNode( node )
     }
-    initializeSinkNode( node: NodeGene ) {
-        node.bias = Math.random() * 2 - 1
+    initializeSinkNode( node: NodeGene, bias = Math.random() * 2 - 1 ) {
+        node.bias = bias
         for ( let i = 0; i < Settings.brain.initialInputsToHidden; i++ ) {
             let otherNode = this.randomNode()
             node.weights[ otherNode.name ] = Math.random() * 2 - 1
@@ -233,7 +249,7 @@ export class BrainGenome {
 
 }
 
-type Node = { inputs: [ number, number ][], value: number, bias: number }
+type Node = { inputs: [ number, number ][], value: number, bias: number, static: boolean }
 type BrainMap = { [ key: string ]: number }
 export default class Brain {
     nodes: Node[] = []
@@ -241,12 +257,14 @@ export default class Brain {
 
     constructor( brainMap: BrainMap ) { this.brainMap = brainMap }
 
-    setValue( name, value ) { this.nodes[ this.brainMap[ name ] ] = value }
-    getValue( name ) { return this.nodes[ this.brainMap[ name ] ] }
+    setValue( name, value ) { this.nodes[ this.brainMap[ name ] ].value = value }
+    getValue( name ) { return this.nodes[ this.brainMap[ name ] ].value }
 
     step() {
         let previousValues = this.nodes.map( node => node.value )
         for ( let node of this.nodes ) {
+            if ( node.static )
+                continue
             let sum = 0
             for ( let [ index, weight ] of node.inputs )
                 sum += previousValues[ index ] * weight

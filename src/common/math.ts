@@ -24,10 +24,34 @@ export function randomElementX<T>( ...arrays: T[][] ): T | undefined {
     }
 }
 
+// Source: https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+let __randomGuassian_next__: number | null = null
+export function randomGuassian() {
+    if ( __randomGuassian_next__ ) {
+        let result = __randomGuassian_next__
+        __randomGuassian_next__ = null
+        return result
+    }
+
+    let angle = Math.random() * 2 * Math.PI
+    let radius = Math.sqrt( -2 * Math.log( Math.random() ) )
+
+    let result1 = Math.cos( angle ) * radius
+    let result2 = Math.sign( angle ) * radius
+
+    __randomGuassian_next__ = result2
+    return result1
+}
+
 export function clamp( x, min = 0, max = 1 ) {
     if ( x < min ) return min
     if ( x > max ) return max
     return x
+}
+
+export function remap( premin: number, premax: number, min: number, max: number, value: number ) {
+    let alpha = ( value - premin ) / ( premax - premin )
+    return min + alpha * ( max - min )
 }
 
 type WeightMap = { [ key: string ]: number }

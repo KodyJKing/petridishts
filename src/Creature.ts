@@ -6,17 +6,31 @@ import Grid from "./common/Grid"
 import { clamp, randInt, random } from "./common/math"
 import Vector2 from "./common/Vector2"
 import Genome from "./Genome"
+import Brain from "./BrainGenome"
 
 export default class Creature {
     rootCell?: Cell
     body: Composite
+    brain: Brain
     genome: Genome
     dead = false
     energy: number
     age: number
     noise: number
 
-    constructor( genome = null ) {
+    static standardInputs = {
+        // sinSeconds( c: Creature ) { return Math.sin( App.instance.engineTime() / 1000 ) },
+        // cosSeconds( c: Creature ) { return Math.cos( App.instance.engineTime() / 1000 ) },
+        // positionX( c: Creature ) { return c.rootCell?.body.position.x ?? 0 },
+        // positionY( c: Creature ) { return c.rootCell?.body.position.y ?? 0 },
+        velocityX( c: Creature ) { return c.rootCell?.body.velocity.x ?? 0 },
+        velocityY( c: Creature ) { return c.rootCell?.body.velocity.y ?? 0 },
+        directionX( c: Creature ) { return Math.cos( c.rootCell?.body.angle ?? 0 ) },
+        directionY( c: Creature ) { return Math.sin( c.rootCell?.body.angle ?? 0 ) },
+        // angularSpeed( c: Creature ) { return c.rootCell?.body.angularSpeed },
+    } as { [ key: string ]: ( c: Creature ) => number }
+
+    constructor( genome: Genome | null = null ) {
         this.body = Composite.create()
         if ( genome ) {
             this.genome = Genome.createChild( genome )
@@ -24,6 +38,7 @@ export default class Creature {
             this.genome = Genome.create()
         }
         this.genome.build( this )
+        this.brain = this.genome.brain.buildBrain()
         this.energy = Settings.startingEnergy
         this.age = 0
         this.noise = Math.random()
@@ -47,8 +62,8 @@ export default class Creature {
             x = random( padding, width - padding )
             y = random( padding, height - padding )
         }
-        Composite.rotate( this.body, random( 0, Math.PI * 2 ), { x: 0, y: 0 } )
-        Composite.translate( this.body, { x, y } )
+        Composite.rotate( this.body, random( 0, Math.PI * 2 ), { x: 0, y: 0 }, true )
+        Composite.translate( this.body, { x, y }, true )
         Composite.add( app.engine.world, this.body )
         // World.add( app.engine.world, this.body )
     }
@@ -60,8 +75,9 @@ export default class Creature {
 
         for ( let body of Composite.allBodies( this.body ) ) {
             let cell = body.plugin.cell
+            if ( cell )
+                cell.update( dt )
             // console.log( cell )
-            cell.update( dt )
         }
 
         this.breakStretchedConstraints()
@@ -79,6 +95,17 @@ export default class Creature {
 
         if ( Math.random() < Settings.repairChancePerTick )
             this.repair()
+
+        this.updateInputs()
+        this.brain.step()
+        // this.updateInputs()
+    }
+
+    updateInputs() {
+        for ( let key in Creature.standardInputs ) {
+            let func = Creature.standardInputs[ key ]
+            this.brain.setValue( key, func( this ) )
+        }
     }
 
     repair() {
@@ -196,7 +223,8 @@ export default class Creature {
         let cellGrid = Grid.Create()
         for ( let body of Composite.allBodies( this.body ) ) {
             let cell = body.plugin.cell as Cell
-            cellGrid.set( cell.x, cell.y, cell )
+            if ( cell )
+                cellGrid.set( cell.x, cell.y, cell )
         }
         return cellGrid
     }
