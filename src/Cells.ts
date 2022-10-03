@@ -1,4 +1,4 @@
-import Matter, { Bodies, Body, Composite, Constraint, Query, Vector, World } from "matter-js"
+import Matter, { Bodies, Body, Composite, Constraint, IChamferableBodyDefinition, Query, Vector, World } from "matter-js"
 import App from "./App"
 import { Settings } from "./Settings"
 import Creature from "./Creature"
@@ -19,8 +19,6 @@ export class Cell {
     static energyRate = -0.00000
     static foodValue = 5
     static stiffness = 1
-
-    static decayTime = 20 * 1000
 
     static inputs: string[] = []
     static outputs: string[] = []
@@ -87,7 +85,7 @@ export class Cell {
         this.edible = true
         if ( this.loseColorOnSever() )
             this.body.render.fillStyle = Cell.color
-        this.decayTime = Cell.decayTime * ( 1 - Math.random() * .2 )
+        this.decayTime = Settings.decayTime * ( 1 - Math.random() * .2 )
         this.onSever()
     }
 
@@ -126,8 +124,9 @@ export class CellPhotosynthesis extends Cell {
     static density = 2
     static strength = 1.1
     // static energyRate = 0.00012
-    static energyRate = 0.00006
+    // static energyRate = 0.00006
     // static energyRate = 0.00003
+    static energyRate = Settings.energyRates.photosynthesis
     static foodValue = 5
 
     metabolicBoost() {
@@ -156,7 +155,7 @@ export class CellMouth extends Cell {
     static density = 2
     static strength = 1.1
     // static energyRate = -0.00010
-    static energyRate = -0.00003
+    static energyRate = Settings.energyRates.mouth
     static foodValue = 7
 
     static cooldown = 500
@@ -199,24 +198,28 @@ export class CellThruster extends Cell {
     static color = "#C88E4B"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00002
+    static energyRate = Settings.energyRates.thruster
     static foodValue = 7
 
-    static thrust = 0.000002
+    // static thrust = 0.000002
+    static thrust = 0.000008
 
-    static outputs: string[] = [ "thrust" ]
+    static outputs: string[] = [ "thrustParallel", "thrustPerp" ]
 
     onUpdate( dt ) {
         if ( !this.creature )
             return
 
-        let force = CellThruster.thrust * Settings.cellSize ** 2 * this.getBrainOutput( "thrust" )
+        let thrustCoef = CellThruster.thrust * Settings.cellSize ** 2
+        let forceParallel = thrustCoef * this.getBrainOutput( "thrustParallel" )
+        let forcePerp = thrustCoef * this.getBrainOutput( "thrustPerp" )
 
+        let t = this.body.angle
         Matter.Body.applyForce(
             this.body, this.body.position,
             {
-                x: Math.cos( this.body.angle ) * force,
-                y: Math.sin( this.body.angle ) * force
+                x: Math.cos( t ) * forceParallel + Math.cos( t + Math.PI / 2 ) * forcePerp,
+                y: Math.sin( t ) * forceParallel + Math.sin( t + Math.PI / 2 ) * forcePerp
             }
         )
     }
@@ -230,7 +233,8 @@ export class CellSpinner extends Cell {
     static energyRate = -0.00002
     static foodValue = 7
 
-    static torque = 0.00001
+    // static torque = 0.00001
+    static torque = 0.00010
 
     static outputs: string[] = [ "torque" ]
 
@@ -242,7 +246,7 @@ export class CellSpinner extends Cell {
 }
 
 export class CellSuction extends Cell {
-    static weight = 3
+    static weight = 0
     static color = "#007F7F"
     static density = 1
     static strength = 1.1
@@ -267,7 +271,11 @@ export class CellSuction extends Cell {
             pos.x, pos.y, radius,
             {
                 isSensor: true, isStatic: true,
-                render: { fillStyle: "rgba(100, 100, 100, 0.25)" },
+                collisionFilter: { group: -1 },
+                render: {
+                    fillStyle: CellEye.inactiveColor,
+                    visible: Settings.showSuctionRadius,
+                },
                 plugin: {
                     on_collisionActive: ( other: Body ) => {
                         let cell = other.plugin.cell as Cell | undefined
@@ -295,19 +303,7 @@ export class CellSuction extends Cell {
         if ( this.sensor )
             Body.setPosition( this.sensor, this.body.position )
 
-        // let app = App.instance
-        // let { engine } = app
-        // let allBodies = Composite.allBodies( engine.world )
-        // let radius = Settings.cellSize * 5
-        // let pos = this.body.position
-        // let circle = Bodies.circle( pos.x, pos.y, radius )
-        // let touching = Query.collides( circle, allBodies )
-        // for ( let collision of touching ) {
         for ( let cell of this.nearbyCells ) {
-            // let body = collision.bodyA
-            // let cell = body.plugin.cell
-            // if ( cell && ( cell.creature != this.creature ) ) {
-            // }
             let body = cell.body
             let diff = Vector.sub( this.body.position, body.position )
             let lengthSq = Vector.magnitudeSquared( diff )
@@ -324,49 +320,56 @@ export class CellSuction extends Cell {
 export class CellEye extends Cell {
 
     static weight = 2
-    static color = "#CC53C9"
+    static color = "#222222"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00001
+    static energyRate = Settings.energyRates.eye
 
-    static inputs: string[] = [ "seeCreature" ]
+    static inputs: string[] = [ "foodX", "foodY", "foodCount", "threatX", "threatY", "threatCount" ]
 
-    static inactiveColor = "rgba(100, 100, 100, 0.25)"
-    static activeColor = "rgba(0, 100, 0, 0.25)"
+    static inactiveColor = "rgba(100, 100, 100, 0.05)"
+    static activeColor = "rgba(0, 100, 0, 0.05)"
 
     sensor?: Body
     collisions: number = 0
+    visibleBodies: Set<Body>
     active: boolean = false
-
 
     constructor( creature: Creature, x: number, y: number ) {
         super( creature, x, y )
         let { cellSize } = Settings
-        let width = 20 * cellSize
-        let halfWidth = width / 2
 
-        this.sensor = Bodies.rectangle(
-            this.x * cellSize - halfWidth, this.y * cellSize,
-            width, cellSize,
-            {
-                isSensor: true, isStatic: true,
-                render: { fillStyle: CellEye.inactiveColor },
-                plugin: {
-                    on_collisionStart: ( other: Body ) => {
-                        let cell = other.plugin.cell as Cell | undefined
-                        if ( cell && cell.creature != this.creature )
-                            this.collisions++
-                    },
-                    on_collisionEnd: ( other: Body ) => {
-                        let cell = other.plugin.cell as Cell | undefined
-                        if ( cell && cell.creature != this.creature )
-                            this.collisions--
-                    }
-                }
+        this.visibleBodies = new Set()
+
+        let sensorOptions: IChamferableBodyDefinition = {
+            isSensor: true, isStatic: true,
+            collisionFilter: { group: -1 },
+            render: { fillStyle: CellEye.inactiveColor },
+            plugin: {
+                on_collisionStart: ( other: Body ) => { this.visibleBodies.add( other ) },
+                on_collisionEnd: ( other: Body ) => { this.visibleBodies.delete( other ) },
+                // on_collisionActive: ( other: Body ) => { this.visibleBodies.add( other ) }
             }
-        )
+        }
 
-        Body.setCentre( this.sensor, { x: this.x * cellSize + cellSize / 2, y: this.y * cellSize } )
+        {
+            let cs = cellSize
+            let vec = ( x, y ) => Vector.create( x, y )
+            let x = this.x * cellSize, y = this.y * cellSize
+            let length = 20 * cellSize, slope = 0.5, width = length * slope
+            this.sensor = Bodies.fromVertices(
+                x, y,
+                [ [
+                    vec( 0, cs / 2 ), vec( length, width / 2 ),
+                    vec( length, - width / 2 ), vec( 0, -cs / 2 ),
+                ] ],
+                sensorOptions
+            )
+            let bounds = this.sensor.bounds
+            let offset = x + cellSize / 2 - bounds.min.x
+            Body.setCentre( this.sensor, { x: x - offset, y } )
+        }
+
         Composite.add( this.composite, this.sensor )
     }
 
@@ -374,6 +377,7 @@ export class CellEye extends Cell {
         if ( this.sensor ) {
             Composite.remove( this.composite, this.sensor )
             this.sensor = undefined
+            this.visibleBodies.clear()
         }
     }
 
@@ -382,29 +386,50 @@ export class CellEye extends Cell {
             Body.setPosition( this.sensor, this.body.position )
             Body.setAngle( this.sensor, this.body.angle )
 
-            this.active = this.collisions > 0
+            let t = this.body.angle, c = Math.cos( t ), s = Math.sin( t )
+            let forward = Vector.create( c, s ), side = Vector.create( -s, c )
+
+            let foodX = 0, foodY = 0, foodCount = 0, threatX = 0, threatY = 0, threatCount = 0
+            for ( let body of this.visibleBodies ) {
+                let cell = body.plugin.cell as Cell | undefined
+                if ( cell && ( cell.creature != this.creature ) ) {
+                    let energy = this.creature?.energy ?? 0
+                    let otherEnergy = cell.creature?.energy ?? 0
+                    let isThreat = cell.creature && ( energy < otherEnergy ) && ( cell instanceof CellMouth )
+                    if ( isThreat ) {
+                        threatX += body.position.x
+                        threatY += body.position.y
+                        threatCount++
+                    } else if ( cell.edible ) {
+                        foodX += body.position.x
+                        foodY += body.position.y
+                        foodCount++
+                    }
+                }
+            }
+
+            const toEyeSpace = ( pos: Vector ) => {
+                let diff = Vector.sub( pos, this.body.position )
+                return Vector.create(
+                    Vector.dot( diff, forward ),
+                    Vector.dot( diff, side )
+                )
+            }
+            let foodPos = toEyeSpace( Vector.create( foodX / foodCount, foodY / foodCount ) )
+            let threatPos = toEyeSpace( Vector.create( threatX / threatCount, threatY / threatCount ) )
+
+            this.setBrainInput( "foodX", foodPos.x )
+            this.setBrainInput( "foodY", foodPos.y )
+            this.setBrainInput( "foodCount", foodCount )
+            this.setBrainInput( "threatX", threatPos.x )
+            this.setBrainInput( "threatY", threatPos.y )
+            this.setBrainInput( "threatCount", threatCount )
+
+            this.active = threatCount > 0 || foodCount > 0
             this.sensor.render.fillStyle = this.active ? CellEye.activeColor : CellEye.inactiveColor
-
-            this.setBrainInput( "seeCreature", this.active ? 1 : 0 )
         }
+
     }
-
-    // onUpdate( dt ) {
-
-    //     let app = App.instance
-    //     let { engine } = app
-    //     let allBodies = Composite.allBodies( engine.world )
-
-    //     let angle = this.body.angle
-    //     let forward = Vector.create( Math.cos( angle ), Math.sin( angle ) )
-    //     let start = this.body.position
-    //     let end = Vector.add( start, Vector.mult( forward, Settings.cellSize * 20 ) )
-
-    //     let collisions = Query.ray( allBodies, start, end )
-
-    //     // console.log( collisions )
-
-    // }
 
 }
 
@@ -416,9 +441,7 @@ export class CellEye extends Cell {
 //     // static energyRate = -0.00002
 //     static energyRate = -0.00008
 //     static foodValue = 7
-
 //     force() { return -0.001 }
-
 // }
 
 // export class CellStringy extends Cell {

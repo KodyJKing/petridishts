@@ -30,6 +30,8 @@ export default class App {
         this.engine.grid.bucketHeight = 15
         this.engine.gravity.y = Settings.gravity
 
+        // this.engine.timing.timeScale = 1
+
         this.runner = Runner.create( {
             delta: 1000 / 60,
             isFixed: true,
@@ -52,6 +54,7 @@ export default class App {
 
         let mouseConstraint = this.mouseConstraint = MouseConstraint.create( this.engine, {
             mouse: Mouse.create( canvasArea ),
+            collisionFilter: { group: -1 },
             // @ts-ignore
             constraint: {
                 // render: { visible: false },
@@ -64,12 +67,15 @@ export default class App {
         { // Walls
             let wallOptions = { isStatic: true, render: { fillStyle: "red" }, plugin: { isWall: true } }
             let { width, height } = this
-            Composite.add( this.engine.world, [
+            let walls = [
                 Bodies.rectangle( -30, height / 2, 60, this.height, wallOptions ),
                 Bodies.rectangle( this.width + 30, height / 2, 60, this.height, wallOptions ),
                 Bodies.rectangle( width / 2, -30, width, 60, wallOptions ),
                 Bodies.rectangle( width / 2, height + 30, width, 60, wallOptions )
-            ] )
+            ]
+            // Composite.add( this.engine.world, walls)
+            for ( let wall of walls )
+                World.add( this.engine.world, wall )
         }
 
         // let bodyA = Bodies.rectangle( 0, 0, Settings.cellSize, Settings.cellSize, { render: { fillStyle: "#DAE3E8" } } )
@@ -78,14 +84,7 @@ export default class App {
 
         this.spawn()
 
-        // let previousTime = performance.now()
-        // let previousDt = 0
-        // let maxDt = 500
         Events.on( this.runner, "afterUpdate", () => {
-            // let currentTime = performance.now()
-            // let dt = Math.min( currentTime - previousTime, maxDt )
-            // previousTime = currentTime
-            // previousDt = dt
             let dt = this.engineDt()
             this.update( dt )
         } )
@@ -139,10 +138,10 @@ export default class App {
         for ( let creature of dead )
             removeFromArray( this.creatures, creature )
 
-        let allBodies = Composite.allBodies( this.engine.world )
-
-        if ( ( ( this.frameCount++ ) % 1000 ) == 0 )
+        if ( Settings.memoryDebug && ( ( this.frameCount++ ) % 1000 ) == 0 )
             this.printMemoryDebug()
+
+        let allBodies = Composite.allBodies( this.engine.world )
 
         if ( !Settings.disableReproduction ) {
             if ( allBodies.length < Settings.maxBodies ) {

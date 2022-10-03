@@ -55,12 +55,13 @@ export class BrainGenome {
                 let node: NodeGene = { name, bias: 0, weights: {} }
                 list.push( node )
                 if ( isSink )
-                    this.initializeSinkNode( node, 2 )
+                    // this.initializeSinkNode( node, 2 )
+                    this.initializeSinkNode( node )
             }
         }
 
         addRemoveNodes( this.inputs, inKeySet, false )
-        addRemoveNodes( this.outputs, outKeySet, false )
+        addRemoveNodes( this.outputs, outKeySet, true )
     }
 
     buildBrain() {

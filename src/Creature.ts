@@ -23,11 +23,26 @@ export default class Creature {
         // cosSeconds( c: Creature ) { return Math.cos( App.instance.engineTime() / 1000 ) },
         // positionX( c: Creature ) { return c.rootCell?.body.position.x ?? 0 },
         // positionY( c: Creature ) { return c.rootCell?.body.position.y ?? 0 },
-        velocityX( c: Creature ) { return c.rootCell?.body.velocity.x ?? 0 },
-        velocityY( c: Creature ) { return c.rootCell?.body.velocity.y ?? 0 },
-        directionX( c: Creature ) { return Math.cos( c.rootCell?.body.angle ?? 0 ) },
-        directionY( c: Creature ) { return Math.sin( c.rootCell?.body.angle ?? 0 ) },
-        // angularSpeed( c: Creature ) { return c.rootCell?.body.angularSpeed },
+        // velocityX( c: Creature ) { return c.rootCell?.body.velocity.x ?? 0 },
+        // velocityY( c: Creature ) { return c.rootCell?.body.velocity.y ?? 0 },
+        velocityParallel( c: Creature ) {
+            let vx = c.rootCell?.body.velocity.x ?? 0
+            let vy = c.rootCell?.body.velocity.y ?? 0
+            let dx = Math.cos( c.rootCell?.body.angle ?? 0 )
+            let dy = Math.sin( c.rootCell?.body.angle ?? 0 )
+            return dx * vx + dy * vy
+        },
+        velocityPerp( c: Creature ) {
+            let vx = c.rootCell?.body.velocity.x ?? 0
+            let vy = c.rootCell?.body.velocity.y ?? 0
+            let dx = -Math.sin( c.rootCell?.body.angle ?? 0 )
+            let dy = Math.cos( c.rootCell?.body.angle ?? 0 )
+            return dx * vx + dy * vy
+        },
+        angularVelocity( c: Creature ) { return c.rootCell?.body.angularVelocity },
+        // directionX( c: Creature ) { return Math.cos( c.rootCell?.body.angle ?? 0 ) },
+        // directionY( c: Creature ) { return Math.sin( c.rootCell?.body.angle ?? 0 ) },
+        // energy( c: Creature ) { return c.energy },
     } as { [ key: string ]: ( c: Creature ) => number }
 
     constructor( genome: Genome | null = null ) {

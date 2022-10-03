@@ -18,14 +18,27 @@ export default class Genome {
         let result = new Genome()
         result.cells = Grid.Create()
 
-        let startRandom = true
-        if ( startRandom ) {
+        if ( Settings.startRandom ) {
             result.setCell( 0, 0, Cells.CellRoot )
             for ( let i = 0; i < Settings.initialMutations; i++ )
                 result.mutate()
         } else {
-            for ( let dx = -2; dx <= 2; dx++ )
-                for ( let dy = 0; dy <= 2; dy++ )
+            // if ( Math.random() < 0.9 ) {
+            //     let r = 1
+            //     for ( let dx = -r; dx <= r; dx++ )
+            //         for ( let dy = 0; dy <= r; dy++ )
+            //             result.setCell( dx, dy, Cells.CellPhotosynthesis )
+            //     result.setCell( r + 1, 0, Cells.CellMouth )
+            //     // result.setCell( r + 1, 1, Cells.CellMouth )
+            //     result.setCell( r, 1, Cells.CellEye )
+            //     result.setCell( - r, 0, Cells.CellThruster )
+            //     result.setCell( 1, 0, Cells.CellSpinner )
+            //     result.setCell( 0, 0, Cells.CellRoot )
+            // } else {
+            // }
+            let r = Settings.initialRadius
+            for ( let dx = -r; dx <= r; dx++ )
+                for ( let dy = 0; dy <= r; dy++ )
                     result.setCell( dx, dy, Cells.CellPhotosynthesis )
             result.setCell( 0, 0, Cells.CellRoot )
         }
@@ -39,14 +52,18 @@ export default class Genome {
 
     static createChild( genome: Genome ) {
         let result = clone( genome ) as Genome
-        if ( Math.random() < Settings.mutationRate )
-            result.mutate()
+        if ( Math.random() < Settings.mutationRate ) {
+            let edits = randInt( Settings.minEdits, Settings.maxEdits + 1 )
+            for ( ; edits > 0; edits-- )
+                result.mutate()
+        }
         let [ inKeys, outKeys ] = result.ioKeys()
         result.brain.setIOKeys( inKeys, outKeys )
         let numMutations = Math.floor( Math.abs( randomGuassian() * Settings.brain.mutationStandardDev ) )
         for ( let i = 0; i < numMutations; i++ )
             result.brain.mutate()
-        result.brain.prune()
+        if ( Settings.brain.prune )
+            result.brain.prune()
         return result
     }
 
