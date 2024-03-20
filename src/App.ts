@@ -20,6 +20,8 @@ export default class App {
     height: number
     creatures: Creature[] = []
 
+    reproductionQueue: Genome[] = []
+
     mouseConstraint: Matter.MouseConstraint
 
     constructor() {
@@ -124,6 +126,88 @@ export default class App {
         Render.run( this.render )
     }
 
+    applyTurbulence( dt: number ) {
+        // Apply force to all bodies whose components are sinusoidal in position and time.
+        let bodies = Composite.allBodies( this.engine.world )
+        for ( let body of bodies ) {
+            let cell = body.plugin.cell as Cell
+            if ( cell ) {
+                let { x, y } = body.position
+                x /= 125
+                y /= 125
+                let t = this.engine.timing.timestamp / 1000
+                let force = {
+                    x: Math.sin( x + t ) * 0.000002,
+                    y: Math.sin( y + t ) * 0.000002
+                }
+                Body.applyForce( body, body.position, force )
+            }
+        }
+    }
+
+    selectCreature(): Creature | undefined {
+        let readyToReproduce = this.creatures.filter( c => c.canReproduce() )
+        if ( readyToReproduce.length > 0 ) {
+            let sampler = createSampler( readyToReproduce.map( c => c.fertility() ) )
+            let index = sampler()
+            return readyToReproduce[ index ]
+        }
+        return undefined
+    }
+
+    dequeueGenomeForReproduction(): Genome | undefined {
+        if ( this.reproductionQueue.length > 0 ) {
+            if ( Settings.dequeueRandomly ) {
+                let index = Math.floor( Math.random() * this.reproductionQueue.length )
+                return this.reproductionQueue.splice( index, 1 )[ 0 ]
+            } else {
+                return this.reproductionQueue.shift()
+            }
+        }
+        return undefined
+    }
+
+    reproductionUpdate( allBodies: Body[] ) {
+        if ( !Settings.disableReproduction ) {
+            if ( allBodies.length < Settings.maxBodies ) {
+
+                let r = Math.random()
+                if ( r < Settings.plantSpawnChance ) {
+                    let creature = new Creature( Genome.createPlant() )
+                    this.creatures.push( creature )
+                    creature.add()
+                } else if ( r < Settings.plantSpawnChance + Settings.predatorSpawnChance ) {
+                    let creature = new Creature( Genome.createPredator() )
+                    this.creatures.push( creature )
+                    creature.add()
+                } else {
+                    let selected = this.dequeueGenomeForReproduction()
+                    if ( selected ) {
+                        this.spawnChild( selected )
+                    } else {
+                        // Reproduce directly from living population
+                        let selected = this.selectCreature()
+                        if ( selected ) {
+                            console.log( "Reproducing from living creature." )
+                            this.spawnChild( selected.genome )
+                            selected.onReproduce()
+                        }
+                    }
+
+                }
+
+            } else if ( this.reproductionQueue.length < Settings.reproductionQueueLength ) {
+                let selected = this.selectCreature()
+                if ( selected ) {
+                    this.reproductionQueue.push( selected.genome )
+                    selected.onReproduce()
+                }
+
+                console.log( "Reproduction queue length:", this.reproductionQueue.length )
+            }
+        }
+    }
+
     frameCount = 0
     update( dt ) {
         let dead = [] as Creature[]
@@ -143,17 +227,7 @@ export default class App {
 
         let allBodies = Composite.allBodies( this.engine.world )
 
-        if ( !Settings.disableReproduction ) {
-            if ( allBodies.length < Settings.maxBodies ) {
-                let readyToReproduce = this.creatures.filter( c => c.canReproduce() )
-                if ( readyToReproduce.length > 0 ) {
-                    let sampler = createSampler( readyToReproduce.map( c => c.fertility() ) )
-                    let index = sampler()
-                    let selected = readyToReproduce[ index ]
-                    selected.reproduce()
-                }
-            }
-        }
+        this.reproductionUpdate( allBodies )
 
         if ( this.creatures.length == 0 ) {
             console.log( "EXTINCTION" )
@@ -180,6 +254,8 @@ export default class App {
             }
         }
 
+        this.applyTurbulence( dt )
+
     }
 
     printMemoryDebug() {
@@ -196,6 +272,12 @@ export default class App {
         console.log( { numCreatures, averageBrainConnections, numBodies, numComposites, numConstraints } )
     }
 
+    spawnChild( parent: Genome ) {
+        let child = new Creature( Genome.createChild( parent ) )
+        this.creatures.push( child )
+        child.add()
+    }
+
     spawn() {
         for ( let i = 0; i < Settings.initialPopulation; i++ ) {
             let creature = new Creature()
@@ -204,8 +286,6 @@ export default class App {
             creature.add()
         }
     }
-
-
 
     engineTime() {
         return this.engine.timing.timestamp

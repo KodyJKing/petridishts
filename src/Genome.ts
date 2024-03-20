@@ -14,40 +14,50 @@ export default class Genome {
     cells!: Grid
     brain!: BrainGenome
 
-    static create() {
+    static createPlant() {
         let result = new Genome()
         result.cells = Grid.Create()
 
-        if ( Settings.startRandom ) {
-            result.setCell( 0, 0, Cells.CellRoot )
-            for ( let i = 0; i < Settings.initialMutations; i++ )
-                result.mutate()
-        } else {
-            // if ( Math.random() < 0.9 ) {
-            //     let r = 1
-            //     for ( let dx = -r; dx <= r; dx++ )
-            //         for ( let dy = 0; dy <= r; dy++ )
-            //             result.setCell( dx, dy, Cells.CellPhotosynthesis )
-            //     result.setCell( r + 1, 0, Cells.CellMouth )
-            //     // result.setCell( r + 1, 1, Cells.CellMouth )
-            //     result.setCell( r, 1, Cells.CellEye )
-            //     result.setCell( - r, 0, Cells.CellThruster )
-            //     result.setCell( 1, 0, Cells.CellSpinner )
-            //     result.setCell( 0, 0, Cells.CellRoot )
-            // } else {
-            // }
-            let r = Settings.initialRadius
-            for ( let dx = -r; dx <= r; dx++ )
-                for ( let dy = 0; dy <= r; dy++ )
-                    result.setCell( dx, dy, Cells.CellPhotosynthesis )
-            result.setCell( 0, 0, Cells.CellRoot )
-        }
+        let r = Settings.initialRadius
+        for ( let dx = -r; dx <= r; dx++ )
+            for ( let dy = 0; dy <= r; dy++ )
+                result.setCell( dx, dy, Cells.CellPhotosynthesis )
+        result.setCell( 0, 0, Cells.CellRoot )
 
         let [ inKeys, outKeys ] = result.ioKeys()
         result.brain = BrainGenome.create()
         result.brain.setIOKeys( inKeys, outKeys )
 
         return result
+    }
+
+    static createPredator() {
+        let result = new Genome()
+        result.cells = Grid.Create()
+
+        let r = 1
+        for ( let dx = -r; dx <= r; dx++ )
+            for ( let dy = 0; dy <= r; dy++ )
+                result.setCell( dx, dy, Cells.CellPhotosynthesis )
+        result.setCell( r + 1, 0, Cells.CellMouth )
+        result.setCell( r, 1, Cells.CellMouth )
+        // result.setCell( -1, 0, Cells.CellSpinner )
+        result.setCell( -2, 0, Cells.CellThruster )
+        result.setCell( 1, 0, Cells.CellEye )
+        result.setCell( 0, 0, Cells.CellRoot )
+
+        let [ inKeys, outKeys ] = result.ioKeys()
+        result.brain = BrainGenome.create()
+        result.brain.setIOKeys( inKeys, outKeys )
+
+        return result
+    }
+
+    static create() {
+        if ( Math.random() < 0.5 )
+            return Genome.createPlant()
+        else
+            return Genome.createPredator()
     }
 
     static createChild( genome: Genome ) {
@@ -119,7 +129,7 @@ export default class Genome {
             let type = this.getCell( pos.x, pos.y )
             let isMirrored = pos.y > 0
             let s = isMirrored ? 2 : 1
-            result += type.foodValue * s
+            result += Math.max( type.foodValue, 0 ) * s
         }
         this._costToBuild = result
         return result
@@ -269,7 +279,7 @@ export default class Genome {
         let dx = x - mount.x
         let dy = y - mount.y
 
-        let cost = type.foodValue + Settings.baseRepairCost
+        let cost = Math.max( type.foodValue, 0 ) + Settings.baseRepairCost
         if ( cost + Settings.minEnergyAfterRepair > creature.energy )
             return
         creature.energy -= cost

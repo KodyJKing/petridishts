@@ -19,8 +19,8 @@ export default class Creature {
     noise: number
 
     static standardInputs = {
-        // sinSeconds( c: Creature ) { return Math.sin( App.instance.engineTime() / 1000 ) },
-        // cosSeconds( c: Creature ) { return Math.cos( App.instance.engineTime() / 1000 ) },
+        sinSeconds( c: Creature ) { return Math.sin( App.instance.engineTime() / 1000 ) },
+        cosSeconds( c: Creature ) { return Math.cos( App.instance.engineTime() / 1000 ) },
         // positionX( c: Creature ) { return c.rootCell?.body.position.x ?? 0 },
         // positionY( c: Creature ) { return c.rootCell?.body.position.y ?? 0 },
         // velocityX( c: Creature ) { return c.rootCell?.body.velocity.x ?? 0 },
@@ -84,7 +84,7 @@ export default class Creature {
     }
 
     update( dt ) {
-        let { maxPopulation, maxAge } = Settings
+        let { maxAge } = Settings
         let app = App.instance
         let { creatures } = app
 
@@ -210,12 +210,15 @@ export default class Creature {
     reproductionCost() { return Settings.startingEnergy + this.genome.costToBuild() }
     fertility() { return this.energy / this.reproductionCost() }
     canReproduce() { return this.energy > this.reproductionCost() + Settings.minEnergyAfterReproduction }
-    reproduce() {
+    // reproduce() {
+    //     this.onReproduce()
+    //     let childGenome = Genome.createChild( this.genome )
+    //     let child = new Creature( childGenome )
+    //     App.instance.creatures.push( child )
+    //     child.add()
+    // }
+    onReproduce() {
         this.energy -= this.reproductionCost()
-        let childGenome = Genome.createChild( this.genome )
-        let child = new Creature( childGenome )
-        App.instance.creatures.push( child )
-        child.add()
     }
 
     constrain( cellA: Cell, cellB: Cell, options ) {

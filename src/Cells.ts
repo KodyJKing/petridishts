@@ -10,6 +10,7 @@ function getColor( cell ) { return cell.constructor.color }
 function getDensity( cell ) { return cell.constructor.density }
 function getEnergyRate( cell ) { return cell.constructor.energyRate }
 function getFoodValue( cell ) { return cell.constructor.foodValue }
+function getIsThreat( cell ) { return cell.constructor.isThreat }
 
 export class Cell {
     static weight = 3
@@ -19,6 +20,7 @@ export class Cell {
     static energyRate = -0.00000
     static foodValue = 5
     static stiffness = 1
+    static isThreat = false
 
     static inputs: string[] = []
     static outputs: string[] = []
@@ -173,10 +175,41 @@ export class CellMouth extends Cell {
         // Can eat other mouth if we have more energy.
         // TODO: Add an optional probabilistic rule.
         if ( other instanceof CellMouth ) {
-            let otherEnergy = other.creature?.energy ?? 0
-            let thisEnergy = this.creature.energy ?? 0
-            if ( otherEnergy > thisEnergy )
+
+            function score( cell: CellMouth, other: CellMouth ) {
+                let speed = Vector.magnitude( cell.body.velocity )
+                let toOther = Vector.normalise( Vector.sub( other.body.position, cell.body.position ) )
+                let mouthForward = Vector.rotate( Vector.create( 1, 0 ), cell.body.angle )
+                let dot = Vector.dot( mouthForward, toOther )
+                return speed * ( dot + 1 )
+            }
+
+            // Mouth with highest score wins.
+            let thisScore = score( this, other )
+            let otherScore = score( other, this )
+            if ( thisScore < otherScore )
                 return
+
+            // Faster mouth wins
+            // let speed = Vector.magnitude( this.body.velocity )
+            // let otherSpeed = Vector.magnitude( other.body.velocity )
+            // if ( speed < otherSpeed )
+            //     return
+
+            // Mouth facing forward wins.
+            // let toOther = Vector.normalise( Vector.sub( other.body.position, this.body.position ) )
+            // let mouthForward = Vector.rotate( Vector.create( 1, 0 ), this.body.angle )
+            // let otherForward = Vector.rotate( Vector.create( 1, 0 ), other.body.angle )
+            // let dot = Vector.dot( mouthForward, otherForward )
+            // let otherDot = -Vector.dot( mouthForward, toOther )
+            // if ( dot < otherDot )
+            //     return
+
+            // Mouth with more energy wins.
+            // let otherEnergy = other.creature?.energy ?? 0
+            // let thisEnergy = this.creature.energy ?? 0
+            // if ( otherEnergy > thisEnergy )
+            //     return
         }
 
         if ( differentCreature && other.edible && this.cooldown <= 0 ) {
@@ -195,6 +228,7 @@ export class CellMouth extends Cell {
 
 export class CellThruster extends Cell {
     static weight = 3
+    // static weight = 0
     static color = "#C88E4B"
     static density = 1
     static strength = 1.1
@@ -204,10 +238,13 @@ export class CellThruster extends Cell {
     // static thrust = 0.000002
     static thrust = 0.000008
 
-    static outputs: string[] = [ "thrustParallel", "thrustPerp" ]
+    static outputs: string[] = [ "thrustParallel", "thrustPerp", "thrustEnable" ]
 
     onUpdate( dt ) {
         if ( !this.creature )
+            return
+
+        if ( this.getBrainOutput( "thrustEnable" ) < 0 )
             return
 
         let thrustCoef = CellThruster.thrust * Settings.cellSize ** 2
@@ -236,22 +273,23 @@ export class CellSpinner extends Cell {
     // static torque = 0.00001
     static torque = 0.00010
 
-    static outputs: string[] = [ "torque" ]
+    static outputs: string[] = [ "torque", "torqueEnable" ]
 
     onUpdate( dt ) {
-        if ( !this.creature )
+        if ( !this.creature || this.getBrainOutput( "torqueEnable" ) < 0 )
             return
         this.body.torque += CellSpinner.torque * dt * this.getBrainOutput( "torque" )
     }
 }
 
 export class CellSuction extends Cell {
-    static weight = 0
+    static weight = 3
     static color = "#007F7F"
     static density = 1
     static strength = 1.1
     static energyRate = -0.00002
     static foodValue = 7
+    static isThreat = true
 
     static outputs: string[] = [ "suction" ]
 
@@ -307,7 +345,7 @@ export class CellSuction extends Cell {
             let body = cell.body
             let diff = Vector.sub( this.body.position, body.position )
             let lengthSq = Vector.magnitudeSquared( diff )
-            let signal = this.getBrainOutput( "suction" )
+            let signal = this.getBrainOutput( "suction" ) + .5 // Bias toward suction.
             let force = Vector.mult( diff, CellSuction.force * signal / lengthSq )
             Body.applyForce( body, body.position, force )
             Body.applyForce( this.body, this.body.position, Vector.neg( force ) )
@@ -327,8 +365,13 @@ export class CellEye extends Cell {
 
     static inputs: string[] = [ "foodX", "foodY", "foodCount", "threatX", "threatY", "threatCount" ]
 
-    static inactiveColor = "rgba(100, 100, 100, 0.05)"
-    static activeColor = "rgba(0, 100, 0, 0.05)"
+    static outputs: string[] = [ "thrust" ]
+
+    // static thrust = 0.000016
+    static thrust = 0.000008
+
+    static inactiveColor = "rgba(100, 100, 100, 0.04)"
+    static activeColor = "rgba(0, 100, 0, 0.04)"
 
     sensor?: Body
     collisions: number = 0
@@ -356,7 +399,7 @@ export class CellEye extends Cell {
             let cs = cellSize
             let vec = ( x, y ) => Vector.create( x, y )
             let x = this.x * cellSize, y = this.y * cellSize
-            let length = 20 * cellSize, slope = 0.5, width = length * slope
+            let length = 40 * cellSize, slope = 0.5, width = length * slope
             this.sensor = Bodies.fromVertices(
                 x, y,
                 [ [
@@ -393,19 +436,24 @@ export class CellEye extends Cell {
             for ( let body of this.visibleBodies ) {
                 let cell = body.plugin.cell as Cell | undefined
                 if ( cell && ( cell.creature != this.creature ) ) {
-                    let energy = this.creature?.energy ?? 0
-                    let otherEnergy = cell.creature?.energy ?? 0
-                    let isThreat = cell.creature && ( energy < otherEnergy ) && ( cell instanceof CellMouth )
+                    let isThreat = getIsThreat( cell )
                     if ( isThreat ) {
                         threatX += body.position.x
                         threatY += body.position.y
                         threatCount++
                     } else if ( cell.edible ) {
-                        foodX += body.position.x
-                        foodY += body.position.y
-                        foodCount++
+                        let foodValue = getFoodValue( cell )
+                        foodX += body.position.x * foodValue
+                        foodY += body.position.y * foodValue
+                        foodCount += foodValue
+                        // foodCount++
                     }
                 }
+            }
+
+            if ( foodCount != 0 ) {
+                foodX /= foodCount
+                foodY /= foodCount
             }
 
             const toEyeSpace = ( pos: Vector ) => {
@@ -427,6 +475,15 @@ export class CellEye extends Cell {
 
             this.active = threatCount > 0 || foodCount > 0
             this.sensor.render.fillStyle = this.active ? CellEye.activeColor : CellEye.inactiveColor
+
+            if ( this.active ) {
+                let thrustSignal = this.getBrainOutput( "thrust" ) + 0.5 // Bias to positive values
+                let thrustCoef = CellEye.thrust * Settings.cellSize ** 2
+                let thrust = thrustCoef * thrustSignal
+                let t = this.body.angle
+                let force = Vector.create( c * thrust, s * thrust )
+                Body.applyForce( this.body, this.body.position, force )
+            }
         }
 
     }
@@ -455,38 +512,45 @@ export class CellEye extends Cell {
 //     static stiffness = 0.05
 // }
 
-// export class CellVampire extends Cell {
-//     static weight = 1
-//     static color = "#890D00"
-//     static density = 2
-//     static strength = 1.1
-//     static energyRate = -0.00005
-//     static foodValue = 7
+export class CellVampire extends Cell {
+    static weight = 3
+    static color = "#890D00"
+    static density = 2
+    static strength = 1.1
+    static energyRate = -0.00001
+    static foodValue = 7
 
-//     static energyPerMilis = 0.0012
+    static energyPerMilis = 0.012
+    static agePerMilis = 1
 
-//     collide( other: Cell, dt: number ) {
-//         let { creature } = this
-//         let otherCreature = other.creature
-//         if ( !creature || !otherCreature ) return
-//         if ( otherCreature != creature ) {
-//             let energy = Math.min( dt * CellVampire.energyPerMilis, otherCreature.energy )
-//             creature.energy += energy
-//             otherCreature.energy -= energy
-//         }
-//     }
+    static isThreat = true
 
-// }
+    collide( other: Cell, dt: number ) {
+        let { creature } = this
+        let otherCreature = other.creature
+        if ( !creature || !otherCreature ) return
+        if ( otherCreature != creature ) {
+            let energy = Math.min( dt * CellVampire.energyPerMilis, otherCreature.energy )
+            creature.energy += energy
+            otherCreature.energy -= energy
 
-// export class CellPoison extends Cell {
-//     static weight = 1
-//     static color = "#121212"
-//     static density = 1
-//     static strength = 1.1
-//     static energyRate = -0.00012
-//     static foodValue = -100
-//     loseColorOnSever() { return false }
-// }
+            creature.age -= dt * CellVampire.agePerMilis
+            // otherCreature.age += dt * CellVampire.agePerMilis
+        }
+    }
+
+}
+
+export class CellPoison extends Cell {
+    static weight = 0
+    static color = "#CC53C9"
+    static density = 1
+    static strength = 1.1
+    static energyRate = -0.00001
+    static foodValue = -100
+    static isThreat = true
+    loseColorOnSever() { return false }
+}
 
 // export class CellImpact extends Cell {
 //     static weight = 10
