@@ -1,15 +1,20 @@
 
 export const Settings = {
+    useMatterJSRenderer: false,
+
     // cellSize: 8,
     cellSize: 6,
+    // cellStrengthModifier: 32,
     cellStrengthModifier: 64,
 
     initialPopulation: 20,
-    maxBodies: 40 * 30,
-    // maxAge: 60 * 1000,
-    maxAge: 20 * 1000,
+    // maxBodies: 40 * 30,
+    maxBodies: 60 * 30,
+    maxAge: 60 * 1000,
+    // maxAge: 20 * 1000,
     // decayTime: 20 * 1000,
-    decayTime: 2 * 1000,
+    decayTime: 4 * 1000,
+    // decayTime: 2 * 1000,
 
     startRandom: false,
     initialRadius: 1,
@@ -22,6 +27,12 @@ export const Settings = {
     deletionRate: 0.4,
     // maxCellsPerGenome: 20,
     maxCellsPerGenome: 10,
+    mutationRates: {
+        addCell: 0.2,
+        // addCell: 0.6,
+        deleteCell: 0.4,
+        insertCell: 0.6,
+    },
 
     startingEnergy: 5,
     minEnergyAfterReproduction: 5,
@@ -30,7 +41,10 @@ export const Settings = {
     metabolicRate: 20,
     carnivoreEfficiency: 1,
     photosynthesisElevationBoost: 0,
+    // photosynthesisElevationBoost: 2,
     gravity: 0.0,
+    // gravity: 0.05,
+    thermalVentEnabled: false,
 
     energyRates: {
         photosynthesis: 0.00006,
@@ -47,10 +61,12 @@ export const Settings = {
     // baseRepairCost: 3,
     baseRepairCost: 0,
     repairChancePerTick: 0.01,
+    startAsRoot: false,
 
     disableReproduction: false,
     plantSpawnChance: 0.5,
-    predatorSpawnChance: 0.05,
+    predatorSpawnChance: 0.0,
+    // predatorSpawnChance: 0.05,
     reproductionQueueLength: 500,
     dequeueRandomly: true,
 

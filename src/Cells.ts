@@ -43,8 +43,8 @@ export class Cell {
         this.y = y
 
         this.body = Bodies.rectangle( x * cellSize, y * cellSize, cellSize, cellSize, { render: { fillStyle: getColor( this ) } } )
-        this.composite = Composite.create( { bodies: [ this.body ] } )
         // this.body = Bodies.circle( x * cellSize, y * cellSize, cellSize / 2, { render: { fillStyle: getColor( this ) } } )
+        this.composite = Composite.create( { bodies: [ this.body ] } )
 
         // @ts-ignore
         this.composite.plugin.descripion = "cell"
@@ -238,11 +238,20 @@ export class CellThruster extends Cell {
     // static thrust = 0.000002
     static thrust = 0.000008
 
-    static outputs: string[] = [ "thrustParallel", "thrustPerp", "thrustEnable" ]
+    static outputs: string[] = [ "thrustParallel", "thrustPerp", "thrustEnable", "break" ]
 
     onUpdate( dt ) {
         if ( !this.creature )
             return
+
+        if ( this.getBrainOutput( "break" ) > 0 ) {
+            Matter.Body.applyForce(
+                this.body, this.body.position,
+                Vector.mult( this.body.velocity, -0.0003 )
+            )
+            this.body.torque += this.body.angularVelocity * -0.0003 * dt
+            return
+        }
 
         if ( this.getBrainOutput( "thrustEnable" ) < 0 )
             return
@@ -367,8 +376,8 @@ export class CellEye extends Cell {
 
     static outputs: string[] = [ "thrust" ]
 
-    // static thrust = 0.000016
-    static thrust = 0.000008
+    static thrust = 0.000016
+    // static thrust = 0.000008
 
     static inactiveColor = "rgba(100, 100, 100, 0.04)"
     static activeColor = "rgba(0, 100, 0, 0.04)"
@@ -399,7 +408,7 @@ export class CellEye extends Cell {
             let cs = cellSize
             let vec = ( x, y ) => Vector.create( x, y )
             let x = this.x * cellSize, y = this.y * cellSize
-            let length = 40 * cellSize, slope = 0.5, width = length * slope
+            let length = 20 * cellSize, slope = 0.5, width = length * slope
             this.sensor = Bodies.fromVertices(
                 x, y,
                 [ [
@@ -535,59 +544,67 @@ export class CellVampire extends Cell {
             otherCreature.energy -= energy
 
             creature.age -= dt * CellVampire.agePerMilis
-            // otherCreature.age += dt * CellVampire.agePerMilis
+            otherCreature.age += dt * CellVampire.agePerMilis
         }
     }
 
 }
 
 export class CellPoison extends Cell {
-    static weight = 0
+    static weight = 2
     static color = "#CC53C9"
     static density = 1
     static strength = 1.1
-    static energyRate = -0.00001
+    static energyRate = -0.00006
     static foodValue = -100
     static isThreat = true
     loseColorOnSever() { return false }
 }
 
-// export class CellImpact extends Cell {
-//     static weight = 10
-//     static color = "#121212"
-//     static density = 1
-//     static strength = 1.1
-//     static energyRate = -0.00006
-//     static foodValue = 7
-//     // loseColorOnSever() { return false }
+export class CellImpact extends Cell {
+    static weight = 0
+    static color = "#A2A2A2"
+    static density = 1
+    static strength = 1.1
+    static energyRate = -0.00006
+    static foodValue = 7
+    static isThreat = true
+    // loseColorOnSever() { return false }
 
-//     static cooldown = 500
-//     static force = 0.05
-//     edible = false
-//     cooldown = 0
+    static cooldown = 500
+    // static force = 0.05
+    static force = 0.025
+    // edible = false
+    cooldown = 0
 
-//     impactEvent: any = null
+    impactEvent: any = null
 
-//     onUpdate( dt ) {
-//         this.cooldown -= dt
-//         if ( this.impactEvent ) {
-//             let { force, body } = this.impactEvent
-//             this.impactEvent = null
-//             Body.applyForce( body, body.position, force )
-//         }
-//     }
+    isUsed = false
 
-//     collide( other: Cell ) {
-//         if ( !this.creature || ( other.creature == this.creature ) || this.cooldown > 0 ) return
-//         // this.cooldown = CellImpact.cooldown
+    onUpdate( dt ) {
+        this.cooldown -= dt
+        if ( this.impactEvent ) {
+            let { force, body } = this.impactEvent
+            this.impactEvent = null
+            Body.applyForce( body, body.position, force )
+            Body.applyForce( this.body, this.body.position, Vector.neg( force ) )
+            this.isUsed = true
+        } else if ( this.isUsed ) {
+            this.remove()
+        }
+    }
 
-//         let diff = Vector.sub( other.body.position, this.body.position )
-//         let dir = Vector.normalise( diff )
-//         let force = Vector.mult( dir, CellImpact.force )
+    collide( other: Cell ) {
+        if ( !this.creature || ( other.creature == this.creature ) || this.cooldown > 0 ) return
+        // this.cooldown = CellImpact.cooldown
 
-//         this.impactEvent = { body: other.body, force }
+        let diff = Vector.sub( other.body.position, this.body.position )
+        let dir = Vector.normalise( diff )
+        let force = Vector.mult( dir, CellImpact.force )
 
-//         // console.log( force )
-//         // Body.applyForce( other.body, other.body.position, force )
-//     }
-// }
+        this.impactEvent = { body: other.body, force }
+
+        // console.log( force )
+        // Body.applyForce( other.body, other.body.position, force )
+    }
+}

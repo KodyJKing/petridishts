@@ -2,11 +2,13 @@ import clone from "./common/clone"
 import Grid from "./common/Grid"
 import * as Cells from "./Cells"
 import createSampler from "./common/createSampler"
-import { randInt, randomElement, randomGuassian } from "./common/math"
+import { randInt, randomElement, randomGuassian, keySampler } from "./common/math"
 import Creature from "./Creature"
 import Matter, { Body, Composite, Vector } from "matter-js"
 import { Settings } from "./Settings"
 import { BrainGenome } from "./BrainGenome"
+
+const sampleMutationType = keySampler( Settings.mutationRates )
 
 const VecRight = Vector.create( 1, 0 )
 const VecUp = Vector.create( 0, 1 )
@@ -53,11 +55,43 @@ export default class Genome {
         return result
     }
 
+    static createVampire() {
+        let result = new Genome()
+        result.cells = Grid.Create()
+
+        let r = 1
+        for ( let dx = -r; dx <= r; dx++ )
+            for ( let dy = 0; dy <= r; dy++ )
+                result.setCell( dx, dy, Cells.CellPhotosynthesis )
+        result.setCell( 1, 0, Cells.CellSuction )
+        result.setCell( 2, 1, Cells.CellVampire )
+        result.setCell( -1, 0, Cells.CellThruster )
+        result.setCell( 0, -1, Cells.CellRoot )
+
+        let [ inKeys, outKeys ] = result.ioKeys()
+        result.brain = BrainGenome.create()
+        result.brain.setIOKeys( inKeys, outKeys )
+
+        return result
+    }
+
     static create() {
-        if ( Math.random() < 0.5 )
-            return Genome.createPlant()
-        else
-            return Genome.createPredator()
+        const type = keySampler( {
+            plant: 0.5,
+            predator: 0.5,
+            vampire: 0.25,
+        } )()
+        switch ( type ) {
+            case "plant": return Genome.createPlant()
+            case "predator": return Genome.createPredator()
+            case "vampire": return Genome.createVampire()
+        }
+
+        // return Genome.createPlant()
+        // if ( Math.random() < 0.5 )
+        //     return Genome.createPlant()
+        // else
+        //     return Genome.createPredator()
     }
 
     static createChild( genome: Genome ) {
@@ -86,19 +120,25 @@ export default class Genome {
     }
 
     mutate() {
-        let { deletionRate } = Settings
-        let r = Math.random()
-        if ( r < deletionRate ) {
-            this.mutateDelete()
-        } else {
-            this.mutateAdd()
+        // let { deletionRate } = Settings
+        // let r = Math.random()
+        // if ( r < deletionRate ) {
+        //     this.mutateDelete()
+        // } else {
+        //     this.mutateAdd()
+        // }
+
+        let type = sampleMutationType()
+        switch ( type ) {
+            case "addCell": this.mutateAdd(); break
+            case "insertCell": this.mutateInsert(); break
+            case "deleteCell": this.mutateDelete(); break
         }
+
         this._costToBuild = undefined
     }
 
-    mutateAdd() {
-        if ( this.cells.size >= Settings.maxCellsPerGenome )
-            return
+    pickMutationPosition() {
         let positions = this.cells.keys()
         let { x, y } = randomElement( positions )
         while ( true ) {
@@ -106,9 +146,43 @@ export default class Genome {
             let y2 = y + randInt( -1, 2 )
             if ( y2 < 0 || ( x2 == 0 && y2 == 0 ) )
                 continue
-            this.setCell( x2, y2, randomCell() )
-            return
+            return { x: x2, y: y2 }
         }
+    }
+
+    mutateAdd() {
+        if ( this.cells.size >= Settings.maxCellsPerGenome )
+            return
+        let { x, y } = this.pickMutationPosition()
+        this.setCell( x, y, randomCell() )
+    }
+
+    mutateInsert() {
+        if ( this.cells.size >= Settings.maxCellsPerGenome )
+            return
+
+        // Pick axis that reduces number of shifts
+        let { x, y } = this.pickMutationPosition()
+        let xAxis = Math.abs( x ) > Math.abs( y )
+        let dx = xAxis ? Math.sign( x ) : 0
+        let dy = xAxis ? 0 : Math.sign( y )
+
+        if ( dx == 0 && dy == 0 ) return
+
+        // Shift existing cells
+        let i = 1
+        let cellToShift = this.getCell( x, y )
+        while ( cellToShift ) {
+            let x2 = x + dx * i
+            let y2 = y + dy * i
+            let nextCell = this.getCell( x2, y2 )
+            this.setCell( x2, y2, cellToShift )
+            cellToShift = nextCell
+            i++
+        }
+
+        // Insert new cell
+        this.setCell( x, y, randomCell() )
     }
 
     mutateDelete() {
@@ -168,8 +242,13 @@ export default class Genome {
                     continue
                 let x = pos.x
                 let y = pos.y * sign
-                let cell = this.buildCell( creature, x, y, type, cellGrid )
-                this.connectCell( creature, cell, x, y, cellGrid )
+                if ( type != Cells.CellRoot && Settings.startAsRoot ) {
+                    let foodValue = type.foodValue
+                    creature.energy += foodValue
+                } else {
+                    let cell = this.buildCell( creature, x, y, type, cellGrid )
+                    this.connectCell( creature, cell, x, y, cellGrid )
+                }
             }
         }
 

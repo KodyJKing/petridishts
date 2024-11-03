@@ -20,9 +20,11 @@ export default class Creature {
 
     static standardInputs = {
         sinSeconds( c: Creature ) { return Math.sin( App.instance.engineTime() / 1000 ) },
-        cosSeconds( c: Creature ) { return Math.cos( App.instance.engineTime() / 1000 ) },
+        // cosSeconds( c: Creature ) { return Math.cos( App.instance.engineTime() / 1000 ) },
+        sinFiveSeconds( c: Creature ) { return Math.sin( App.instance.engineTime() / 5000 ) },
         // positionX( c: Creature ) { return c.rootCell?.body.position.x ?? 0 },
         // positionY( c: Creature ) { return c.rootCell?.body.position.y ?? 0 },
+        // depth( c: Creature ) { return ( c.rootCell?.body.position.y ?? 0 ) / App.instance.height },
         // velocityX( c: Creature ) { return c.rootCell?.body.velocity.x ?? 0 },
         // velocityY( c: Creature ) { return c.rootCell?.body.velocity.y ?? 0 },
         velocityParallel( c: Creature ) {
@@ -52,9 +54,9 @@ export default class Creature {
         } else {
             this.genome = Genome.create()
         }
+        this.energy = Settings.startingEnergy
         this.genome.build( this )
         this.brain = this.genome.brain.buildBrain()
-        this.energy = Settings.startingEnergy
         this.age = 0
         this.noise = Math.random()
     }

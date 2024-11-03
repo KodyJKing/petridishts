@@ -15,7 +15,8 @@ export default class App {
     context!: CanvasRenderingContext2D
     engine: Engine
     runner: Runner
-    render: Render
+    renderer!: Render
+    canvas!: HTMLCanvasElement
     width: number
     height: number
     creatures: Creature[] = []
@@ -43,16 +44,30 @@ export default class App {
         let canvasArea = document.getElementById( "canvasArea" ) as HTMLCanvasElement
         this.width = canvasArea.clientWidth
         this.height = canvasArea.clientHeight
-        this.render = Render.create( {
-            engine: this.engine,
-            element: canvasArea,
-            options: {
-                width: this.width,
-                height: this.height,
-                wireframes: false,
-                background: "transparent"
+
+        if ( Settings.useMatterJSRenderer ) {
+            this.renderer = Render.create( {
+                engine: this.engine,
+                element: canvasArea,
+                options: {
+                    width: this.width,
+                    height: this.height,
+                    wireframes: false,
+                    background: "transparent"
+                }
+            } )
+            Render.run( this.renderer )
+        } else {
+            this.canvas = document.createElement( "canvas" )
+            canvasArea.appendChild( this.canvas )
+            this.canvas.width = this.width
+            this.canvas.height = this.height
+            const renderLoop = () => {
+                this.render()
+                requestAnimationFrame( renderLoop )
             }
-        } )
+            renderLoop()
+        }
 
         let mouseConstraint = this.mouseConstraint = MouseConstraint.create( this.engine, {
             mouse: Mouse.create( canvasArea ),
@@ -123,24 +138,61 @@ export default class App {
 
 
         Runner.run( this.runner, this.engine )
-        Render.run( this.render )
     }
 
-    applyTurbulence( dt: number ) {
-        // Apply force to all bodies whose components are sinusoidal in position and time.
+    render() {
+        let canvas = this.canvas
+        let ctx = canvas.getContext( "2d" )
+        if ( !ctx )
+            return
+
+        ctx.clearRect( 0, 0, this.width, this.height )
+
+        let bodies = Composite.allBodies( this.engine.world )
+        for ( let body of bodies ) {
+            let verts = body.vertices
+            if ( verts.length == 0 ) continue
+            let fillStyle = body.render.fillStyle
+            if ( fillStyle )
+                ctx.fillStyle = fillStyle
+            ctx?.beginPath()
+            ctx.moveTo( verts[ 0 ].x, verts[ 0 ].y )
+            for ( let i = 0; i < verts.length; i++ ) {
+                let v = verts[ i ]
+                ctx.lineTo( v.x, v.y )
+            }
+            ctx.fill()
+        }
+    }
+
+    applyWaterForces( dt: number ) {
         let bodies = Composite.allBodies( this.engine.world )
         for ( let body of bodies ) {
             let cell = body.plugin.cell as Cell
             if ( cell ) {
                 let { x, y } = body.position
-                x /= 125
-                y /= 125
                 let t = this.engine.timing.timestamp / 1000
-                let force = {
-                    x: Math.sin( x + t ) * 0.000002,
-                    y: Math.sin( y + t ) * 0.000002
+                let x2 = x / 125
+                let y2 = y / 125
+
+                let f = { x: 0, y: 0 }
+
+                // Wave
+                f.x += Math.sin( x2 + t ) * 0.000002
+                f.y += Math.sin( y2 + t ) * 0.000002
+
+                if ( Settings.thermalVentEnabled ) {
+                    let centerX = this.width / 2
+                    let ventPos = { x: centerX, y: this.height }
+                    let diff = { x: x - ventPos.x, y: y - ventPos.y }
+                    let distance = Math.sqrt( diff.x * diff.x + diff.y * diff.y )
+                    let n = Matter.Vector.normalise( diff )
+                    let force = 1 / ( distance * distance ) * -n.y * ( Math.sin( t ) + 1 )
+                    f.x += n.x * force
+                    f.y += n.y * force
                 }
-                Body.applyForce( body, body.position, force )
+
+                Body.applyForce( body, body.position, f )
             }
         }
     }
@@ -176,11 +228,13 @@ export default class App {
                     let creature = new Creature( Genome.createPlant() )
                     this.creatures.push( creature )
                     creature.add()
-                } else if ( r < Settings.plantSpawnChance + Settings.predatorSpawnChance ) {
-                    let creature = new Creature( Genome.createPredator() )
-                    this.creatures.push( creature )
-                    creature.add()
-                } else {
+                }
+                // else if ( r < Settings.plantSpawnChance + Settings.predatorSpawnChance ) {
+                //     let creature = new Creature( Genome.createPredator() )
+                //     this.creatures.push( creature )
+                //     creature.add()
+                // }
+                else {
                     let selected = this.dequeueGenomeForReproduction()
                     if ( selected ) {
                         this.spawnChild( selected )
@@ -254,7 +308,7 @@ export default class App {
             }
         }
 
-        this.applyTurbulence( dt )
+        this.applyWaterForces( dt )
 
     }
 
